@@ -20,7 +20,7 @@ export function assetUrl(p) {
 }
 
 export function clearAuth() {
-    SESSION_KEYS.forEach(removeEncryptedItem);
+    for (const key of SESSION_KEYS) removeEncryptedItem(key);
     forgetSharedGets();
 }
 
@@ -41,48 +41,49 @@ function buildUrl(endpoint, params) {
     return url;
 }
 
+const isFormData = (value) => typeof FormData !== 'undefined' && value instanceof FormData;
+
+function httpError(message, status, data) {
+    const err = new Error(message);
+    err.status = status;
+    err.data = data;
+    return err;
+}
+
+async function sessionExpired(res) {
+    const body = await res.json().catch(() => null);
+    clearAuth();
+    if (typeof window !== 'undefined' && !window.location.pathname.includes('/auth/login')) {
+        try {
+            if (body?.message) sessionStorage.setItem(LOGOUT_NOTICE_KEY, body.message);
+        } catch {}
+        window.location.href = publicPath('auth/login');
+    }
+    return httpError(body?.error || body?.message || 'Sesi berakhir, silakan login kembali', 401, body);
+}
+
 async function request(endpoint, options = {}) {
-    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
-    const hasJsonBody = !isFormData && options.body !== undefined;
+    const hasJsonBody = !isFormData(options.body) && options.body !== undefined;
     const headers = {
         ...(hasJsonBody ? { 'Content-Type': 'application/json' } : {}),
         'x-api-key': APP_KEY,
-        ...(options.headers || {})
+        ...options.headers
     };
 
-    const url = buildUrl(endpoint, options.params);
-
-    const res = await fetch(url, {
+    const res = await fetch(buildUrl(endpoint, options.params), {
         ...options,
         headers,
         credentials: 'include'
     });
 
-    if (res.status === 401) {
-        const body = await res.json().catch(() => null);
-        clearAuth();
-        if (typeof window !== 'undefined' && !window.location.pathname.includes('/auth/login')) {
-            try {
-                if (body?.message) sessionStorage.setItem(LOGOUT_NOTICE_KEY, body.message);
-            } catch {}
-            window.location.href = publicPath('auth/login');
-        }
-        const err = new Error(body?.error || body?.message || 'Sesi berakhir, silakan login kembali');
-        err.status = 401;
-        err.data = body;
-        throw err;
-    }
+    if (res.status === 401) throw await sessionExpired(res);
 
-    const contentType = res.headers.get('content-type') || '';
-    const isJson = contentType.includes('application/json');
+    const isJson = (res.headers.get('content-type') || '').includes('application/json');
     const data = isJson ? await res.json() : await res.text();
 
     if (!res.ok) {
         const message = (data && typeof data === 'object' && (data.error || data.message)) || res.statusText || 'Request failed';
-        const err = new Error(message);
-        err.status = res.status;
-        err.data = data;
-        throw err;
+        throw httpError(message, res.status, data);
     }
 
     return data;
@@ -97,7 +98,7 @@ async function requestBlob(endpoint, params) {
         throw err;
     }
     const disposition = res.headers.get('content-disposition') || '';
-    const match = disposition.match(/filename="?([^";]+)"?/i);
+    const match = /filename="?([^";]+)"?/i.exec(disposition);
     return { blob: await res.blob(), filename: match ? decodeURIComponent(match[1]) : '' };
 }
 
@@ -107,7 +108,7 @@ export function saveBlob(blob, filename) {
     link.setAttribute('download', filename);
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    link.remove();
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
@@ -147,6 +148,13 @@ function sharedGet(url, params) {
     return entry.promise.then(copyOf);
 }
 
+// null, 0, false, dan '' tetap dikirim sebagai JSON; hanya undefined yang berarti tanpa body.
+function serializeBody(data) {
+    if (isFormData(data)) return data;
+    if (data === undefined) return undefined;
+    return JSON.stringify(data);
+}
+
 function write(url, options) {
     forgetSharedGets();
     return request(url, options).finally(forgetSharedGets);
@@ -155,21 +163,9 @@ function write(url, options) {
 export const api = {
     get: (url, params) => sharedGet(url, params),
     blob: (url, params) => requestBlob(url, params),
-    post: (url, data) => {
-        const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
-        return write(url, {
-            method: 'POST',
-            body: isFormData ? data : (data !== undefined ? JSON.stringify(data) : undefined)
-        });
-    },
+    post: (url, data) => write(url, { method: 'POST', body: serializeBody(data) }),
     upload: (url, formData) => write(url, { method: 'POST', body: formData }),
-    put: (url, data) => {
-        const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
-        return write(url, {
-            method: 'PUT',
-            body: isFormData ? data : (data !== undefined ? JSON.stringify(data) : undefined)
-        });
-    },
+    put: (url, data) => write(url, { method: 'PUT', body: serializeBody(data) }),
     delete: (url, data) => write(url, { method: 'DELETE', body: data ? JSON.stringify(data) : undefined })
 };
 

@@ -27,7 +27,7 @@ export const TOUR_STEPS = {
         {
             element: 'admin-stats',
             title: 'Ringkasan organisasi',
-            text: 'Angka utama cuti seluruh divisi tahun ini.'
+            text: 'Angka utama cuti seluruh divisi: karyawan aktif, pengajuan, dan hari libur tahun ini.'
         },
         {
             element: 'notifications',

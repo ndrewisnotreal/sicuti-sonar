@@ -109,7 +109,10 @@ export const sicutiState = reactive({
     approvalFlows: [],
     leaveRequests: [],
     pendingApprovalCount: 0,
-    dataVersion: 0
+    dataVersion: 0,
+    // 'idle' | 'loading' | 'ready' | 'error'. Sinkron ulang setelah 'ready' tidak kembali ke 'loading'
+    // agar data lama tetap tampil (izin pengguna 2026-11-09, audit-034 #3).
+    syncStatus: 'idle'
 });
 
 const PENDING_FRESH_MS = 2000;
@@ -223,6 +226,8 @@ export function syncFromBackend() {
 }
 
 async function runSync() {
+    if (sicutiState.syncStatus !== 'ready') sicutiState.syncStatus = 'loading';
+    let failed = false;
     try {
         const year = new Date().getFullYear();
         const [reqs, balances, holidays, leaveTypes, policy, flows, depts, usersRes, menuRes] = await Promise.allSettled([
@@ -242,6 +247,9 @@ async function runSync() {
         ]);
 
         void refreshPendingApprovalCount();
+
+        // Pengajuan, hari libur, dan pengguna adalah sumber angka Dashboard Admin; gagal di sini berarti 0 bukan fakta.
+        failed = [reqs, holidays, usersRes].some((r) => r.status === 'rejected');
 
         if (reqs.status === 'fulfilled' && reqs.value) {
             const rawReqs = reqs.value.data?.data || reqs.value.data || reqs.value;
@@ -382,8 +390,10 @@ async function runSync() {
             }
         }
     } catch (e) {
+        failed = true;
         console.warn('[sicutiService] syncFromBackend error:', e.message);
     }
+    sicutiState.syncStatus = failed ? 'error' : 'ready';
 }
 
 export async function login(identifier, password) {
@@ -429,6 +439,7 @@ export function logout() {
     authService.logout();
     currentUser.value = null;
     activeRole.value = null;
+    sicutiState.syncStatus = 'idle';
     clearAuth();
 }
 

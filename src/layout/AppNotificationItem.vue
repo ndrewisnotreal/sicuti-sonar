@@ -11,7 +11,7 @@
             class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 shadow-xs"
             :class="getIconBadgeClass(item.group)"
         >
-            <component :is="getNotifIcon(item.group)" :size="15" :stroke-width="2" />
+            <component :is="getNotifIcon(item.group)" :size="14" weight="bold" aria-hidden="true" />
         </div>
 
         <div class="flex-1 min-w-0">
@@ -41,7 +41,7 @@
                 </span>
                 <span class="text-[11px] text-primary group-hover:underline flex items-center gap-0.5">
                     <span>Buka detail</span>
-                    <ChevronRight :size="11" />
+                    <PhCaretRight :size="14" weight="bold" aria-hidden="true" />
                 </span>
             </div>
         </div>
@@ -50,16 +50,16 @@
 
 <script setup>
 import {
-    CheckCircle2,
-    XCircle,
-    AlertTriangle,
-    Clock,
-    FileText,
-    ShieldCheck,
-    Calendar,
-    Bell,
-    ChevronRight
-} from 'lucide-vue-next';
+    PhCheckCircle,
+    PhXCircle,
+    PhWarning,
+    PhClock,
+    PhFileText,
+    PhSealCheck,
+    PhCalendarBlank,
+    PhBell,
+    PhCaretRight
+} from '@phosphor-icons/vue';
 
 defineProps({
     item: {
@@ -72,14 +72,14 @@ const emit = defineEmits(['click']);
 
 function getNotifIcon(type) {
     switch (type) {
-        case 'approved': return CheckCircle2;
-        case 'rejected': return XCircle;
-        case 'returned': return AlertTriangle;
-        case 'pending': return Clock;
-        case 'submitted': return FileText;
-        case 'role_request': return ShieldCheck;
-        case 'info': return Calendar;
-        default: return Bell;
+        case 'approved': return PhCheckCircle;
+        case 'rejected': return PhXCircle;
+        case 'returned': return PhWarning;
+        case 'pending': return PhClock;
+        case 'submitted': return PhFileText;
+        case 'role_request': return PhSealCheck;
+        case 'info': return PhCalendarBlank;
+        default: return PhBell;
     }
 }
 

@@ -4,7 +4,7 @@ import { sicutiState, syncFromBackend, isSuperAdmin, can, formatDate, CURRENT_YE
 import { useConfirm } from 'primevue/useconfirm';
 import { adminService } from '@/service/adminService';
 import { useToast } from 'primevue/usetoast';
-import { Plus, Pencil, Trash2, Upload } from 'lucide-vue-next';
+import { PhPlus, PhPencilSimple, PhTrash, PhUploadSimple } from '@phosphor-icons/vue';
 import ReadOnlyNotice from '@/components/common/ReadOnlyNotice.vue';
 import HolidayFormDialog from '@/components/admin/HolidayFormDialog.vue';
 import HolidayBatchUploadDialog from '@/components/admin/HolidayBatchUploadDialog.vue';
@@ -72,97 +72,90 @@ function deleteHoliday(item) {
     <div class="space-y-6">
         <ReadOnlyNotice data-tour="readonly-notice" v-if="!canManage" module="hari libur" />
 
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-                <h1 class="text-xl font-bold text-surface-900 dark:text-surface-100">Master Hari Libur & Cuti Bersama {{ CURRENT_YEAR }}</h1>
-                <p class="text-xs text-muted-color">Tanggal libur resmi yang dikecualikan dari pemotongan kuota cuti tahunan</p>
+        <!-- Satu kartu halaman: judul dan aksi, ringkasan, lalu tabel (acuan 00b §6.1, audit-014 #4). -->
+        <div class="card !mb-0">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 class="text-xl font-bold text-surface-900 dark:text-surface-100">Master Hari Libur & Cuti Bersama {{ CURRENT_YEAR }}</h1>
+                    <p class="text-xs text-muted-color">Tanggal libur resmi yang dikecualikan dari pemotongan kuota cuti tahunan</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <Button data-tour="hol-import"
+                        v-if="canManage"
+                        severity="secondary"
+                        outlined
+                        size="small"
+                        class="font-semibold flex items-center gap-1.5"
+                        @click="openImportHolidays"
+                    >
+                        <PhUploadSimple :size="14" weight="bold" aria-hidden="true" />
+                        <span>Impor CSV</span>
+                    </Button>
+                    <Button data-tour="hol-add"
+                        v-if="canManage"
+                        severity="primary"
+                        size="small"
+                        class="font-semibold flex items-center gap-1.5"
+                        @click="openAdd"
+                    >
+                        <PhPlus :size="14" weight="bold" aria-hidden="true" />
+                        <span>Tambah Hari Libur</span>
+                    </Button>
+                </div>
             </div>
-            <div class="flex items-center gap-2">
-                <Button data-tour="hol-import"
-                    v-if="canManage"
-                    severity="secondary"
-                    outlined
-                    size="small"
-                    class="font-semibold flex items-center gap-1.5"
-                    @click="openImportHolidays"
-                >
-                    <Upload :size="14" :stroke-width="2" />
-                    <span>Impor CSV</span>
-                </Button>
-                <Button data-tour="hol-add"
-                    v-if="canManage"
-                    severity="primary"
-                    size="small"
-                    class="font-semibold flex items-center gap-1.5"
-                    @click="openAdd"
-                >
-                    <Plus :size="14" :stroke-width="2" />
-                    <span>Tambah Hari Libur</span>
-                </Button>
-            </div>
-        </div>
 
-        <div data-tour="hol-table" class="card border border-surface-200 dark:border-surface-700 p-4 rounded-xl bg-surface-0 dark:bg-surface-900 shadow-sm">
-            <div class="flex flex-wrap items-center gap-x-5 gap-y-2 px-1 pb-3 text-sm text-surface-700 dark:text-surface-300">
-                <span class="inline-flex items-center gap-2">
-                    <span class="size-2.5 rounded-full bg-red-600" aria-hidden="true" />
-                    Libur Nasional <strong class="text-surface-900 dark:text-surface-0 tabular-nums">{{ holidayCounts.national }}</strong>
-                </span>
-                <span class="inline-flex items-center gap-2">
-                    <span class="size-2.5 rounded-full bg-amber-500" aria-hidden="true" />
-                    Cuti Bersama <strong class="text-surface-900 dark:text-surface-0 tabular-nums">{{ holidayCounts.collective }}</strong>
-                </span>
+            <div data-tour="hol-table" class="mt-6">
+                <p class="flex flex-wrap items-center gap-x-5 gap-y-2 pb-3 text-sm text-surface-700 dark:text-surface-300">
+                    <span>Libur Nasional <strong class="text-surface-900 dark:text-surface-0 tabular-nums">{{ holidayCounts.national }}</strong></span>
+                    <span>Cuti Bersama <strong class="text-surface-900 dark:text-surface-0 tabular-nums">{{ holidayCounts.collective }}</strong></span>
+                </p>
+                <DataTable :value="sicutiState.holidays" paginator :rows="10" class="p-datatable-sm text-sm" responsiveLayout="scroll">
+                    <template #empty>
+                        <div class="text-center py-8 text-muted-color">Belum ada hari libur tahun {{ CURRENT_YEAR }}.</div>
+                    </template>
+                    <Column field="date" header="Tanggal" style="width: 24%">
+                        <template #body="{ data }">
+                            <span v-if="data.date" class="font-semibold text-surface-900 dark:text-surface-100">{{ dateLabel(data) }}</span>
+                            <span v-else class="text-muted-color">-</span>
+                        </template>
+                    </Column>
+                    <Column field="name" header="Nama hari libur" style="width: 38%">
+                        <template #body="{ data }">
+                            <span class="font-semibold text-surface-800 dark:text-surface-200">{{ data.name }}</span>
+                        </template>
+                    </Column>
+                    <!-- Kategori memakai Tag yang sama dengan pratinjau impor; merah selaras dengan hari libur di Kalender Cuti (audit-014 #3). -->
+                    <Column field="type" header="Kategori" style="width: 23%" :pt="{ headerCell: { 'data-tour': 'hol-col-type' } }">
+                        <template #body="{ data }">
+                            <Tag :value="data.type === 'national' ? 'Libur Nasional' : 'Cuti Bersama'" :severity="data.type === 'national' ? 'danger' : 'warn'" />
+                        </template>
+                    </Column>
+                    <Column v-if="canManage" header="Aksi" style="width: 15%">
+                        <template #body="{ data }">
+                            <div class="flex items-center gap-1">
+                                <button
+                                    type="button"
+                                    class="w-9 h-9 flex items-center justify-center text-surface-500 hover:text-primary hover:bg-surface-100 dark:hover:bg-surface-800 rounded-border transition-colors cursor-pointer"
+                                    :aria-label="`Ubah ${data.name}`"
+                                    title="Ubah"
+                                    @click="openEdit(data)"
+                                >
+                                    <PhPencilSimple :size="14" weight="bold" aria-hidden="true" />
+                                </button>
+                                <button
+                                    type="button"
+                                    class="w-9 h-9 flex items-center justify-center text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-border transition-colors cursor-pointer"
+                                    :aria-label="`Hapus ${data.name}`"
+                                    title="Hapus"
+                                    @click="deleteHoliday(data)"
+                                >
+                                    <PhTrash :size="14" weight="bold" aria-hidden="true" />
+                                </button>
+                            </div>
+                        </template>
+                    </Column>
+                </DataTable>
             </div>
-            <DataTable :value="sicutiState.holidays" paginator :rows="10" class="p-datatable-sm text-sm" responsiveLayout="scroll">
-                <Column field="date" header="Tanggal" style="width: 24%">
-                    <template #body="{ data }">
-                        <span v-if="data.date" class="font-semibold text-surface-900 dark:text-surface-100">{{ dateLabel(data) }}</span>
-                        <span v-else class="text-muted-color">-</span>
-                    </template>
-                </Column>
-                <Column field="name" header="Nama hari libur" style="width: 38%">
-                    <template #body="{ data }">
-                        <span class="font-semibold text-surface-800 dark:text-surface-200">{{ data.name }}</span>
-                    </template>
-                </Column>
-                <Column field="type" header="Kategori" style="width: 23%" :pt="{ headerCell: { 'data-tour': 'hol-col-type' } }">
-                    <template #body="{ data }">
-                        <span
-                            class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold"
-                            :class="
-                                data.type === 'national'
-                                    ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300'
-                                    : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300'
-                            "
-                        >
-                            <span class="size-1.5 rounded-full" :class="data.type === 'national' ? 'bg-red-600' : 'bg-amber-500'" aria-hidden="true" />
-                            {{ data.type === 'national' ? 'Libur Nasional' : 'Cuti Bersama' }}
-                        </span>
-                    </template>
-                </Column>
-                <Column v-if="canManage" header="Aksi" style="width: 15%">
-                    <template #body="{ data }">
-                        <div class="flex items-center gap-1">
-                            <button
-                                type="button"
-                                class="p-1.5 text-surface-500 hover:text-primary hover:bg-surface-100 dark:hover:bg-surface-800 rounded-lg transition-colors cursor-pointer"
-                                @click="openEdit(data)"
-                                title="Ubah"
-                            >
-                                <Pencil :size="15" :stroke-width="1.75" />
-                            </button>
-                            <button
-                                type="button"
-                                class="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg transition-colors cursor-pointer"
-                                @click="deleteHoliday(data)"
-                                title="Hapus"
-                            >
-                                <Trash2 :size="15" :stroke-width="1.75" />
-                            </button>
-                        </div>
-                    </template>
-                </Column>
-            </DataTable>
         </div>
 
         <HolidayFormDialog

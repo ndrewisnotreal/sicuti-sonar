@@ -54,8 +54,8 @@ watch(
                 Belum ada riwayat perubahan status.
                 <span v-if="user?.status_user === 'N'" class="block mt-1">Akun ini dinonaktifkan sebelum alasan mulai dicatat.</span>
             </div>
-            <ol v-else class="space-y-3">
-                <li v-for="h in history" :key="h.id_log" class="rounded-xl border border-surface-200 dark:border-surface-700 p-3">
+            <ol v-else class="divide-y divide-surface-200 dark:divide-surface-700">
+                <li v-for="h in history" :key="h.id_log" class="py-3 first:pt-0 last:pb-0">
                     <div class="flex items-center justify-between gap-2">
                         <Tag :value="h.status === 'N' ? 'Dinonaktifkan' : 'Diaktifkan'" :severity="h.status === 'N' ? 'secondary' : 'success'" class="text-[11px]" />
                         <span class="text-[11px] text-muted-color">{{ formatDateTime(h.created_at) }}</span>

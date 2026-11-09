@@ -4,7 +4,7 @@ import { isSuperAdmin, can, setActiveLeaveTypes } from '@/service/sicutiService'
 import { adminService } from '@/service/adminService';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
-import { Plus, Pencil, Ban, Check } from 'lucide-vue-next';
+import { PhPlus, PhPencilSimple, PhProhibit, PhCheck } from '@phosphor-icons/vue';
 import ReadOnlyNotice from '@/components/common/ReadOnlyNotice.vue';
 import LeaveTypeFormDialog from '@/components/admin/LeaveTypeFormDialog.vue';
 
@@ -13,6 +13,8 @@ const confirm = useConfirm();
 const dialogVisible = ref(false);
 const isEditing = ref(false);
 const leaveTypes = ref([]);
+const loading = ref(false);
+const loadError = ref(false);
 
 const canManage = computed(() => isSuperAdmin() || can('master_data.manage_leave_types'));
 
@@ -48,13 +50,24 @@ function fromApi(t) {
 
 
 async function load() {
+    loading.value = true;
+    loadError.value = false;
     try {
         const list = await adminService.getLeaveTypes(true);
         leaveTypes.value = (Array.isArray(list) ? list : []).map(fromApi);
         setActiveLeaveTypes(list);
     } catch (err) {
+        loadError.value = true;
         toast.add({ severity: 'error', summary: 'Jenis cuti gagal dimuat', detail: err.message, life: 4000 });
+    } finally {
+        loading.value = false;
     }
+}
+
+// Atribut konfigurasi ditulis sebagai teks; warna hanya untuk status (audit-012 #4).
+function documentRule(t) {
+    if (!t.requiresDocument) return 'Tidak wajib';
+    return t.allowLateDocument ? `Wajib, boleh menyusul ${t.lateDocumentDays} hari` : 'Wajib';
 }
 
 function openAdd() {
@@ -139,98 +152,102 @@ onMounted(load);
 <template>
     <div class="space-y-6">
         <ReadOnlyNotice data-tour="readonly-notice" v-if="!canManage" module="jenis cuti" />
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-                <h1 class="text-xl font-bold text-surface-900 dark:text-surface-100">Master Jenis Cuti</h1>
-                <p class="text-xs text-muted-color">Konfigurasi jenis cuti, aturan pengurangan kuota tahunan, dan syarat dokumen</p>
-            </div>
-            <Button data-tour="lt-add"
-                v-if="canManage"
-                severity="primary"
-                size="small"
-                class="text-xs font-bold flex items-center gap-1.5"
-                @click="openAdd"
-            >
-                <Plus :size="14" :stroke-width="2" />
-                <span>Tambah Jenis Cuti</span>
-            </Button>
-        </div>
 
-        <div data-tour="lt-table" class="card border border-surface-200 dark:border-surface-700 p-4 rounded-xl bg-surface-0 dark:bg-surface-900 shadow-sm">
-            <DataTable :value="leaveTypes" class="p-datatable-sm text-xs" responsiveLayout="scroll">
-                <Column field="code" header="Kode" style="width: 10%">
-                    <template #body="{ data }">
-                        <span class="font-bold text-sky-600">{{ data.code }}</span>
+        <!-- Satu kartu halaman: judul dan aksi, lalu tabel (acuan 00b §6.1, audit-012 #5). -->
+        <div class="card !mb-0">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 class="text-xl font-bold text-surface-900 dark:text-surface-100">Master Jenis Cuti</h1>
+                    <p class="text-xs text-muted-color">Konfigurasi jenis cuti, aturan pengurangan kuota tahunan, dan syarat dokumen</p>
+                </div>
+                <Button data-tour="lt-add"
+                    v-if="canManage"
+                    severity="primary"
+                    size="small"
+                    class="text-xs font-bold flex items-center gap-1.5"
+                    @click="openAdd"
+                >
+                    <PhPlus :size="14" weight="bold" aria-hidden="true" />
+                    <span>Tambah Jenis Cuti</span>
+                </Button>
+            </div>
+
+            <div v-if="loadError" role="alert" class="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-border bg-amber-100 dark:bg-amber-950/40 px-3 py-2 text-sm leading-relaxed text-amber-900 dark:text-amber-100">
+                <span>Jenis cuti gagal dimuat. Daftar di bawah belum lengkap.</span>
+                <Button label="Coba lagi" severity="secondary" size="small" class="text-xs !min-h-11" :loading="loading" @click="load" />
+            </div>
+
+            <div data-tour="lt-table" class="mt-6">
+                <DataTable :value="leaveTypes" :loading="loading" class="p-datatable-sm text-xs" responsiveLayout="scroll">
+                    <template #empty>
+                        <div class="text-center py-8 text-muted-color">{{ loadError ? 'Jenis cuti belum termuat.' : 'Belum ada jenis cuti.' }}</div>
                     </template>
-                </Column>
-                <Column field="name" header="Nama Jenis Cuti" style="width: 25%">
-                    <template #body="{ data }">
-                        <div class="font-bold text-surface-900 dark:text-surface-100">{{ data.name }}</div>
-                        <div class="text-[11px] text-muted-color">{{ data.description }}</div>
-                    </template>
-                </Column>
-                <Column header="Mengurangi Kuota" style="width: 18%" :pt="{ headerCell: { 'data-tour': 'lt-col-quota' } }">
-                    <template #body="{ data }">
-                        <Tag
-                            :value="data.usesQuota ? 'Ya (Kurangi Kuota)' : 'Tidak (Cuti Khusus)'"
-                            :severity="data.usesQuota ? 'warn' : 'info'"
-                            class="text-[11px]"
-                        />
-                    </template>
-                </Column>
-                <Column header="Wajib Dokumen" style="width: 18%">
-                    <template #body="{ data }">
-                        <Tag
-                            :value="data.requiresDocument ? (data.allowLateDocument ? `Wajib, boleh menyusul ${data.lateDocumentDays} hari` : 'Wajib Bukti') : 'Tidak Wajib'"
-                            :severity="data.requiresDocument ? 'danger' : 'secondary'"
-                            class="text-[11px]"
-                        />
-                    </template>
-                </Column>
-                <Column header="Aturan" style="width: 16%" :pt="{ headerCell: { 'data-tour': 'lt-col-rules' } }">
-                    <template #body="{ data }">
-                        <div class="text-[11px] text-surface-700 dark:text-surface-300 space-y-0.5">
-                            <div>{{ data.maxDays ? `Maks. ${data.maxDays} hari kerja` : 'Tanpa batas hari' }}</div>
-                            <div :class="data.allowBackdate ? 'text-amber-700 dark:text-amber-300' : 'text-muted-color'">
-                                {{ data.allowBackdate ? 'Boleh tanggal lampau' : 'Tidak boleh tanggal lampau' }}
+                    <Column field="code" header="Kode" style="width: 10%">
+                        <template #body="{ data }">
+                            <span class="font-bold text-surface-900 dark:text-surface-100">{{ data.code }}</span>
+                        </template>
+                    </Column>
+                    <Column field="name" header="Nama Jenis Cuti" style="width: 25%">
+                        <template #body="{ data }">
+                            <div class="font-bold text-surface-900 dark:text-surface-100">{{ data.name }}</div>
+                            <div class="text-xs text-muted-color">{{ data.description }}</div>
+                        </template>
+                    </Column>
+                    <Column header="Mengurangi Kuota" style="width: 18%" :pt="{ headerCell: { 'data-tour': 'lt-col-quota' } }">
+                        <template #body="{ data }">
+                            <span class="text-surface-800 dark:text-surface-200">{{ data.usesQuota ? 'Ya, mengurangi kuota' : 'Tidak, cuti khusus' }}</span>
+                        </template>
+                    </Column>
+                    <Column header="Wajib Dokumen" style="width: 18%">
+                        <template #body="{ data }">
+                            <span class="text-surface-800 dark:text-surface-200">{{ documentRule(data) }}</span>
+                        </template>
+                    </Column>
+                    <Column header="Aturan" style="width: 16%" :pt="{ headerCell: { 'data-tour': 'lt-col-rules' } }">
+                        <template #body="{ data }">
+                            <div class="text-surface-800 dark:text-surface-200 space-y-0.5">
+                                <div>{{ data.maxDays ? `Maks. ${data.maxDays} hari kerja` : 'Tanpa batas hari' }}</div>
+                                <div>{{ data.allowBackdate ? 'Boleh tanggal lampau' : 'Tidak boleh tanggal lampau' }}</div>
                             </div>
-                        </div>
-                    </template>
-                </Column>
-                <Column header="Status" style="width: 12%">
-                    <template #body="{ data }">
-                        <Tag :value="data.isActive ? 'Aktif' : 'Nonaktif'" :severity="data.isActive ? 'success' : 'secondary'" class="text-[11px]" />
-                    </template>
-                </Column>
-                <Column v-if="canManage" header="Aksi" style="width: 17%">
-                    <template #body="{ data }">
-                        <div class="flex items-center gap-1">
-                            <button
-                                type="button"
-                                class="p-1.5 text-surface-500 hover:text-primary hover:bg-surface-100 dark:hover:bg-surface-800 rounded-lg transition-colors cursor-pointer"
-                                @click="openEdit(data)"
-                                title="Ubah"
-                            >
-                                <Pencil :size="15" :stroke-width="1.75" />
-                            </button>
-                            <button
-                                type="button"
-                                :class="[
-                                    'p-1.5 rounded-lg transition-colors cursor-pointer',
-                                    data.isActive
-                                        ? 'text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20'
-                                        : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20'
-                                ]"
-                                @click="toggleStatus(data)"
-                                :title="data.isActive ? 'Nonaktifkan' : 'Aktifkan'"
-                            >
-                                <Ban v-if="data.isActive" :size="15" :stroke-width="1.75" />
-                                <Check v-else :size="15" :stroke-width="2" />
-                            </button>
-                        </div>
-                    </template>
-                </Column>
-            </DataTable>
+                        </template>
+                    </Column>
+                    <Column header="Status" style="width: 12%">
+                        <template #body="{ data }">
+                            <Tag :value="data.isActive ? 'Aktif' : 'Nonaktif'" :severity="data.isActive ? 'success' : 'secondary'" />
+                        </template>
+                    </Column>
+                    <Column v-if="canManage" header="Aksi" style="width: 17%">
+                        <template #body="{ data }">
+                            <div class="flex items-center gap-1">
+                                <button
+                                    type="button"
+                                    class="w-9 h-9 flex items-center justify-center text-surface-500 hover:text-primary hover:bg-surface-100 dark:hover:bg-surface-800 rounded-border transition-colors cursor-pointer"
+                                    :aria-label="`Ubah ${data.name}`"
+                                    title="Ubah"
+                                    @click="openEdit(data)"
+                                >
+                                    <PhPencilSimple :size="14" weight="bold" aria-hidden="true" />
+                                </button>
+                                <button
+                                    type="button"
+                                    :class="[
+                                        'w-9 h-9 flex items-center justify-center rounded-border transition-colors cursor-pointer',
+                                        data.isActive
+                                            ? 'text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20'
+                                            : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20'
+                                    ]"
+                                    :aria-label="`${data.isActive ? 'Nonaktifkan' : 'Aktifkan'} ${data.name}`"
+                                    :title="data.isActive ? 'Nonaktifkan' : 'Aktifkan'"
+                                    @click="toggleStatus(data)"
+                                >
+                                    <PhProhibit v-if="data.isActive" :size="14" weight="bold" aria-hidden="true" />
+                                    <PhCheck v-else :size="14" weight="bold" aria-hidden="true" />
+                                </button>
+                            </div>
+                        </template>
+                    </Column>
+                </DataTable>
+            </div>
         </div>
 
         <LeaveTypeFormDialog

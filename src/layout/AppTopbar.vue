@@ -11,16 +11,15 @@ import AppTourMenu from './AppTourMenu.vue';
 import AppTourMenuItems from './AppTourMenuItems.vue';
 import { useTour } from '@/tour/useTour';
 import {
-    Menu as MenuIcon,
-    PanelLeftClose,
-    PanelLeftOpen,
-    Moon,
-    Sun,
-    LogOut,
-    User,
-    ChevronDown,
-    ChevronRight
-} from 'lucide-vue-next';
+    PhList,
+    PhSidebarSimple,
+    PhMoon,
+    PhSun,
+    PhSignOut,
+    PhUser,
+    PhCaretDown,
+    PhCaretRight
+} from '@phosphor-icons/vue';
 
 const router = useRouter();
 const {
@@ -129,30 +128,33 @@ function handleLogout() {
 </script>
 
 <template>
-    <header class="sticky top-0 z-40 w-full h-16 bg-surface-0 dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 px-3 sm:px-6 flex items-center justify-between gap-2 shadow-xs">
+    <header
+        class="sticky top-0 z-40 w-full h-16 bg-surface-0 dark:bg-surface-900 px-3 sm:px-6 flex items-center justify-between gap-2"
+        :class="{ 'lg:pl-1': showSidebar }"
+    >
         <div class="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
                 v-if="showSidebar"
                 type="button"
-                class="lg:hidden w-10 h-10 flex items-center justify-center text-surface-600 dark:text-surface-300 hover:text-surface-900 dark:hover:text-surface-0 hover:bg-surface-100 dark:hover:bg-surface-800 rounded-lg transition-colors cursor-pointer"
+                class="lg:hidden w-11 h-11 flex items-center justify-center text-surface-600 dark:text-surface-300 hover:text-surface-900 dark:hover:text-surface-0 hover:bg-surface-100 dark:hover:bg-surface-800 rounded-lg transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 data-tour="menu-mobile"
                 @click="toggleMobileMenu"
                 aria-label="Buka menu navigasi utama"
             >
-                <MenuIcon :size="20" :stroke-width="1.75" />
+                <PhList :size="22" weight="regular" aria-hidden="true" />
             </button>
             <button
                 v-if="showSidebar"
                 type="button"
-                class="hidden lg:flex w-10 h-10 items-center justify-center text-surface-600 dark:text-surface-300 hover:text-surface-900 dark:hover:text-surface-0 hover:bg-surface-100 dark:hover:bg-surface-800 rounded-lg transition-colors cursor-pointer"
+                class="hidden lg:flex w-11 h-11 items-center justify-center text-surface-600 dark:text-surface-300 hover:text-surface-900 dark:hover:text-surface-0 hover:bg-surface-100 dark:hover:bg-surface-800 rounded-lg transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 @click="toggleSidebarCollapse"
                 :aria-label="sidebarToggleLabel"
                 :title="sidebarToggleLabel"
                 :aria-expanded="!isSidebarCollapsed"
                 aria-controls="app-sidebar"
             >
-                <PanelLeftOpen v-if="isSidebarCollapsed" :size="20" :stroke-width="1.75" />
-                <PanelLeftClose v-else :size="20" :stroke-width="1.75" />
+                <PhSidebarSimple v-if="isSidebarCollapsed" :size="22" weight="regular" aria-hidden="true" />
+                <PhSidebarSimple v-else :size="22" weight="regular" aria-hidden="true" />
             </button>
             <router-link to="/" :class="['flex items-center gap-2 sm:gap-2.5 min-w-0', { 'lg:hidden': showSidebar }]">
                 <img :src="publicPath('logo-inalum.png')" alt="Logo PT INALUM" class="h-7 sm:h-8 w-auto object-contain shrink-0" />
@@ -174,8 +176,8 @@ function handleLogout() {
                 :aria-label="isDarkTheme ? 'Beralih ke mode terang' : 'Beralih ke mode gelap'"
                 title="Ganti Mode Gelap/Terang"
             >
-                <Sun v-if="isDarkTheme" :size="17" :stroke-width="1.75" />
-                <Moon v-else :size="17" :stroke-width="1.75" />
+                <PhSun v-if="isDarkTheme" :size="16" weight="bold" aria-hidden="true" />
+                <PhMoon v-else :size="16" weight="bold" aria-hidden="true" />
             </button>
 
             <div class="h-6 w-px bg-surface-200 dark:bg-surface-800 mx-1 hidden sm:block"></div>
@@ -207,7 +209,7 @@ function handleLogout() {
                     <span class="text-xs font-semibold truncate text-surface-900 dark:text-surface-100 hidden sm:block max-w-[140px]" :title="currentUser?.name">
                         {{ currentUser?.name || 'Karyawan' }}
                     </span>
-                    <ChevronDown :size="14" class="text-muted-color hidden sm:block transition-transform duration-200" :class="{ 'rotate-180': profileMenuOpen }" />
+                    <PhCaretDown :size="14" weight="bold" aria-hidden="true" class="text-muted-color hidden sm:block transition-transform duration-200" :class="{ 'rotate-180': profileMenuOpen }" />
                 </button>
 
                 <transition
@@ -222,9 +224,9 @@ function handleLogout() {
                         v-if="profileMenuOpen"
                         role="dialog"
                         aria-label="Profil dan opsi akun"
-                        class="absolute right-0 top-full mt-2 w-80 bg-surface-0 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl shadow-xl z-50 overflow-hidden flex flex-col text-left origin-top-right"
+                        class="absolute right-0 top-full mt-2 w-80 bg-surface-0 dark:bg-surface-900 border border-surface rounded-2xl shadow-xl z-50 overflow-hidden flex flex-col text-left origin-top-right"
                     >
-                        <div class="p-4 bg-surface-50/80 dark:bg-surface-800/40 border-b border-surface-100 dark:border-surface-800 flex items-start gap-3.5">
+                        <div class="p-4 border-b border-surface flex items-start gap-3.5">
                             <img
                                 v-if="userPhoto"
                                 :src="userPhoto"
@@ -268,7 +270,7 @@ function handleLogout() {
                             >
                                 <div class="flex items-center gap-3">
                                     <div class="w-8 h-8 rounded-lg bg-surface-100 dark:bg-surface-800 group-hover:bg-primary/10 group-hover:text-primary transition-colors flex items-center justify-center text-surface-600 dark:text-surface-300">
-                                        <User :size="16" />
+                                        <PhUser :size="16" weight="bold" aria-hidden="true" />
                                     </div>
                                     <div class="flex flex-col">
                                         <span class="text-xs font-semibold text-surface-800 dark:text-surface-100 group-hover:text-primary transition-colors">
@@ -279,7 +281,7 @@ function handleLogout() {
                                         </span>
                                     </div>
                                 </div>
-                                <ChevronRight :size="14" class="text-muted-color group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                                <PhCaretRight :size="14" weight="bold" aria-hidden="true" class="text-muted-color group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
                             </component>
 
                             <div v-if="pageTour || introTour" class="sm:hidden">
@@ -295,7 +297,7 @@ function handleLogout() {
                             >
                                 <div class="flex items-center gap-3">
                                     <div class="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/50 group-hover:bg-rose-100 dark:group-hover:bg-rose-900/60 transition-colors flex items-center justify-center text-rose-500">
-                                        <LogOut :size="15" />
+                                        <PhSignOut :size="14" weight="bold" aria-hidden="true" />
                                     </div>
                                     <div class="flex flex-col">
                                         <span class="text-xs font-semibold text-rose-600 dark:text-rose-400">

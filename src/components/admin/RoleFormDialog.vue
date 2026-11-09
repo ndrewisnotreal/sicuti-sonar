@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { rbacService } from '@/service/rbacService';
 
@@ -29,6 +29,8 @@ const toast = useToast();
 const roleName = ref('');
 const copyFrom = ref(null);
 const saving = ref(false);
+// Kesalahan validasi di bawah field, bukan toast (DESIGN.md bagian Form, audit-025 #5).
+const nameError = ref('');
 
 const copyOptions = computed(() =>
     (props.roles || [])
@@ -44,6 +46,7 @@ watch(
             roleName.value = '';
             copyFrom.value = null;
             saving.value = false;
+            nameError.value = '';
         }
     }
 );
@@ -51,9 +54,12 @@ watch(
 async function submitRoleDialog() {
     const name = roleName.value.trim();
     if (!name) {
-        toast.add({ severity: 'warn', summary: 'Nama peran wajib diisi', life: 3000 });
+        nameError.value = 'Nama peran wajib diisi';
+        await nextTick();
+        document.getElementById('role-name')?.focus();
         return;
     }
+    nameError.value = '';
     saving.value = true;
     try {
         const source = copySource.value;
@@ -90,9 +96,21 @@ async function submitRoleDialog() {
         <form class="space-y-4 pt-1 text-sm" @submit.prevent="submitRoleDialog">
             <div>
                 <label for="role-name" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">
-                    Nama peran <span class="text-rose-500">*</span>
+                    Nama peran <span class="text-(--status-danger-fg)" aria-hidden="true">*</span>
                 </label>
-                <InputText id="role-name" v-model="roleName" class="w-full" placeholder="Contoh: Staff HRD" autofocus />
+                <InputText
+                    id="role-name"
+                    v-model="roleName"
+                    class="w-full"
+                    placeholder="Contoh: Staff HRD"
+                    autofocus
+                    aria-required="true"
+                    :invalid="Boolean(nameError)"
+                    :aria-invalid="Boolean(nameError)"
+                    :aria-describedby="nameError ? 'role-name-error' : undefined"
+                    @input="nameError = ''"
+                />
+                <p v-if="nameError" id="role-name-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ nameError }}</p>
             </div>
             <div>
                 <label for="role-copy" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Salin hak akses dari</label>
@@ -105,8 +123,9 @@ async function submitRoleDialog() {
                     placeholder="Mulai dari kosong"
                     showClear
                     fluid
+                    aria-describedby="role-copy-help"
                 />
-                <p class="text-[11px] text-muted-color mt-1">
+                <p id="role-copy-help" class="text-xs text-surface-600 dark:text-surface-400 mt-1">
                     {{
                         copySource
                             ? `Kelompok peran ikut ${copySource.nm_role} (${groupOf(copySource.level)?.label}).`

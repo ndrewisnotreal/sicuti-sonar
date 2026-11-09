@@ -47,6 +47,11 @@ describe('leaveService tanpa request ganda (revisi uji UI)', () => {
         expect(muts[0]).toMatchObject({ type: 'credit', amount: 12 });
     });
 
+    it('getBalanceMutations meneruskan galat riwayat ke pemanggil (audit-028 #11)', async () => {
+        api.get.mockRejectedValueOnce(new Error('500'));
+        await expect(leaveService.getBalanceMutations({ year: 2026, balances: [] })).rejects.toThrow('500');
+    });
+
     it('getBalanceMutations tanpa saldo dari halaman tetap memuat saldonya sendiri', async () => {
         api.get.mockResolvedValue({ data: [] });
         await leaveService.getBalanceMutations({ year: 2026 });

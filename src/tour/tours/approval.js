@@ -75,7 +75,7 @@ export const TOUR_STEPS = {
         {
             element: 'pending-list-mobile',
             title: 'Antrean pengajuan',
-            text: 'Setiap kartu berisi pemohon, jenis cuti, periode, dan durasi. <b>Detail</b> menampilkan isi lengkap; <b>Proses</b> membuka formulir keputusan.'
+            text: 'Setiap pengajuan berisi pemohon, jenis cuti, periode, dan durasi. <b>Detail</b> menampilkan isi lengkap; <b>Proses</b> membuka formulir keputusan.'
         }
     ],
     'approval.proses': [
@@ -136,22 +136,22 @@ export const TOUR_STEPS = {
         {
             element: 'history-filters',
             title: 'Cari & saring',
-            text: 'Cari berdasarkan nama, nomor pengajuan, atau catatan, dan saring per status: Disetujui, Ditolak, atau Dikembalikan.'
+            text: 'Cari berdasarkan nama, nomor pengajuan, jenis cuti, atau catatan, dan saring menurut status pengajuan sekarang.'
         },
         {
             element: 'history-col-status',
-            title: 'Status akhir',
-            text: 'Status pengajuan sekarang. Pengajuan yang Anda setujui bisa masih menunggu approver berikutnya.'
+            title: 'Status sekarang',
+            text: 'Status pengajuan saat ini, terpisah dari keputusan Anda. Pengajuan yang Anda setujui bisa masih menunggu approver berikutnya.'
         },
         {
             element: 'history-col-notes',
-            title: 'Catatan persetujuan',
-            text: 'Catatan yang ditulis saat keputusan diberikan.'
+            title: 'Catatan Anda',
+            text: 'Catatan yang Anda tulis saat memberi keputusan.'
         },
         {
             element: 'history-list-mobile',
             title: 'Riwayat keputusan',
-            text: 'Setiap kartu berisi pengajuan yang pernah Anda proses, status sekarang, dan catatannya.'
+            text: 'Setiap baris berisi pengajuan yang pernah Anda proses, keputusan Anda, status sekarang, dan catatan Anda.'
         }
     ]
 };

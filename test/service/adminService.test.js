@@ -69,6 +69,35 @@ describe('adminService riwayat status akun', () => {
     });
 });
 
+describe('adminService teks Audit Trail', () => {
+    beforeEach(() => vi.clearAllMocks());
+
+    const details = async (rows) => {
+        api.get.mockResolvedValue({ data: rows });
+        return (await adminService.getAuditLogs()).map((r) => r.details);
+    };
+
+    it('login/logout, body bersarang vs langsung, batas empat field, alasan umum, data kosong', async () => {
+        expect(
+            await details([
+                { action: 'LOGIN', user_name: 'Budi' },
+                { action: 'LOGOUT', username: 'budi01' },
+                { action: 'CREATE_HOLIDAY', entity_id: 'H1', new_data: { method: 'POST', path: '/x', body: { a: 1, b: '', c: null, d: { x: 1 }, e: 'E', f: 2, g: 3, h: 4 } } },
+                { action: 'UPDATE_POLICY', entity_id: '', new_data: { reason: 'koreksi', limit: 12, method: 'PUT' } },
+                { action: 'AKSI_BARU', new_data: null },
+                { action: 'DEACTIVATE_USER', new_data: {} }
+            ])
+        ).toEqual([
+            'Budi masuk ke aplikasi',
+            'budi01 keluar dari aplikasi',
+            'Tambah hari libur H1 · a: 1 · e: E · f: 2 · g: 3',
+            'Ubah kebijakan cuti (koreksi) · reason: koreksi · limit: 12',
+            'AKSI_BARU',
+            'Nonaktifkan akun'
+        ]);
+    });
+});
+
 describe('adminService daftar pengajuan (Pemantauan & Laporan)', () => {
     beforeEach(() => vi.clearAllMocks());
 

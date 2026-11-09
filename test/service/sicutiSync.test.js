@@ -40,6 +40,29 @@ describe('syncFromBackend', () => {
         expect(calls(api, '/sicuti/holiday')[0][1]).toEqual({ year: YEAR });
     });
 
+    it('syncStatus: loading → ready; gagal → error; sinkron ulang setelah ready tidak kembali ke loading (audit-034 #3)', async () => {
+        const { api, svc } = await freshModules();
+        expect(svc.sicutiState.syncStatus).toBe('idle');
+        const first = svc.syncFromBackend();
+        expect(svc.sicutiState.syncStatus).toBe('loading');
+        await first;
+        expect(svc.sicutiState.syncStatus).toBe('ready');
+
+        const second = svc.syncFromBackend();
+        expect(svc.sicutiState.syncStatus).toBe('ready');
+        await second;
+
+        api.get.mockImplementation(async (url) => {
+            if (url === '/sicuti/leave-request') throw new Error('500');
+            return url === '/auth/menu' ? { data: { menu: [], abilities: [] } } : { data: [] };
+        });
+        await svc.syncFromBackend();
+        expect(svc.sicutiState.syncStatus).toBe('error');
+
+        svc.logout();
+        expect(svc.sicutiState.syncStatus).toBe('idle');
+    });
+
     it('membuka modul tidak memicu sinkronisasi kedua secara otomatis', async () => {
         vi.useFakeTimers();
         try {

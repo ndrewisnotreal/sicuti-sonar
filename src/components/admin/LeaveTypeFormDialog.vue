@@ -10,13 +10,23 @@
         <div class="space-y-4 pt-2 text-xs">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                    <label class="block font-medium mb-1">Kode Unik *</label>
-                    <InputText v-model="form.code" class="w-full text-xs" placeholder="Misal: CT" />
+                    <label for="lt-code" class="block font-medium mb-1">Kode Unik *</label>
+                    <InputText
+                        id="lt-code"
+                        v-model="form.code"
+                        class="w-full text-xs"
+                        placeholder="Misal: CT"
+                        :invalid="!!errors.code"
+                        :aria-invalid="!!errors.code"
+                        :aria-describedby="errors.code ? 'lt-code-error' : undefined"
+                    />
+                    <p v-if="errors.code" id="lt-code-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ errors.code }}</p>
                 </div>
                 <div>
-                    <label class="block font-medium mb-1">Status</label>
+                    <label id="lt-status-label" class="block font-medium mb-1">Status</label>
                     <Select
                         v-model="form.isActive"
+                        ariaLabelledby="lt-status-label"
                         :options="[{ label: 'Aktif', value: true }, { label: 'Nonaktif', value: false }]"
                         optionLabel="label"
                         optionValue="value"
@@ -25,12 +35,21 @@
                 </div>
             </div>
             <div>
-                <label class="block font-medium mb-1">Nama Jenis Cuti *</label>
-                <InputText v-model="form.name" class="w-full text-xs" placeholder="Nama Jenis Cuti" />
+                <label for="lt-name" class="block font-medium mb-1">Nama Jenis Cuti *</label>
+                <InputText
+                    id="lt-name"
+                    v-model="form.name"
+                    class="w-full text-xs"
+                    placeholder="Nama Jenis Cuti"
+                    :invalid="!!errors.name"
+                    :aria-invalid="!!errors.name"
+                    :aria-describedby="errors.name ? 'lt-name-error' : undefined"
+                />
+                <p v-if="errors.name" id="lt-name-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ errors.name }}</p>
             </div>
             <div>
-                <label class="block font-medium mb-1">Deskripsi / Keterangan</label>
-                <Textarea v-model="form.description" rows="2" class="w-full text-xs" placeholder="Keterangan aturan cuti..." />
+                <label for="lt-desc" class="block font-medium mb-1">Deskripsi / Keterangan</label>
+                <Textarea id="lt-desc" v-model="form.description" rows="2" class="w-full text-xs" placeholder="Keterangan aturan cuti..." />
             </div>
             <div class="space-y-2 pt-2 border-t border-surface-200 dark:border-surface-700">
                 <div class="flex items-center gap-2">
@@ -64,7 +83,7 @@
             <div>
                 <label for="maxDays" class="block font-medium mb-1">Durasi maksimal per pengajuan (hari kerja)</label>
                 <InputNumber v-model="form.maxDays" inputId="maxDays" :min="1" :max="365" placeholder="Kosongkan bila tanpa batas" class="w-full text-xs" fluid />
-                <p class="text-[11px] text-muted-color mt-1">Contoh: Cuti Haid 2 hari, Cuti Menikah 3 hari (BR-01A).</p>
+                <p class="text-xs text-muted-color mt-1">Contoh: Cuti Haid 2 hari, Cuti Menikah 3 hari.</p>
             </div>
         </div>
         <template #footer>
@@ -77,7 +96,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { nextTick, ref, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { adminService } from '@/service/adminService';
 
@@ -114,6 +133,10 @@ const form = ref({
 });
 
 const saving = ref(false);
+// Kesalahan validasi ditampilkan di bawah field, bukan hanya toast (audit-012 #2). Syaratnya tetap: kode dan nama wajib.
+const errors = ref({ code: '', name: '' });
+watch(() => form.value.code, () => (errors.value.code = ''));
+watch(() => form.value.name, () => (errors.value.name = ''));
 
 watch(
     () => props.typeData,
@@ -132,6 +155,7 @@ watch(
                 allowLateDocument: Boolean(newVal.allowLateDocument),
                 lateDocumentDays: Number(newVal.lateDocumentDays) || 3
             };
+            errors.value = { code: '', name: '' };
         }
     },
     { immediate: true, deep: true }
@@ -158,8 +182,14 @@ function toApi(t) {
 }
 
 async function handleSave() {
-    if (!form.value.code?.trim() || !form.value.name?.trim()) {
-        toast.add({ severity: 'error', summary: 'Validasi', detail: 'Kode dan Nama jenis cuti wajib diisi', life: 3000 });
+    errors.value = {
+        code: form.value.code?.trim() ? '' : 'Kode jenis cuti wajib diisi.',
+        name: form.value.name?.trim() ? '' : 'Nama jenis cuti wajib diisi.'
+    };
+    if (errors.value.code || errors.value.name) {
+        const first = errors.value.code ? 'lt-code' : 'lt-name';
+        await nextTick();
+        document.getElementById(first)?.focus();
         return;
     }
 

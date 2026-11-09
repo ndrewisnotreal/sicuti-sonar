@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import api, { API_BASE, LOGOUT_NOTICE_KEY, SESSION_KEYS, assetUrl, clearAuth } from '@/service/api';
+import api, { API_BASE, LOGOUT_NOTICE_KEY, SESSION_KEYS, assetUrl, clearAuth, saveBlob } from '@/service/api';
 import { setEncryptedItem } from '@/utils/encryption';
 
 function mockFetch(status, body) {
@@ -178,6 +178,65 @@ describe('api', () => {
         expect(res).toEqual({ blob: 'ISI', filename: 'laporan 2026.csv' });
         await api.blob('/sicuti/leave-request/REQ-1/document');
         expect(fetchMock.mock.calls[1][0]).toBe('/api/sicuti/leave-request/REQ-1/document');
+    });
+
+    it('body POST/PUT: undefined tanpa body, nilai falsy tetap JSON, FormData apa adanya', async () => {
+        const fetchMock = mockFetch(200, { data: {} });
+        const fd = new FormData();
+        await api.post('/x');
+        await api.post('/x', null);
+        await api.put('/x', 0);
+        await api.put('/x', '');
+        await api.put('/x', false);
+        await api.post('/x', fd);
+        const sent = fetchMock.mock.calls.map(([, opts]) => [opts.method, opts.body, opts.headers['Content-Type']]);
+        expect(sent).toEqual([
+            ['POST', undefined, undefined],
+            ['POST', 'null', 'application/json'],
+            ['PUT', '0', 'application/json'],
+            ['PUT', '""', 'application/json'],
+            ['PUT', 'false', 'application/json'],
+            ['POST', fd, undefined]
+        ]);
+    });
+
+    it('DELETE hanya mengirim body bila data truthy', async () => {
+        const fetchMock = mockFetch(200, { data: {} });
+        await api.delete('/x');
+        await api.delete('/x', { id: 1 });
+        expect(fetchMock.mock.calls[0][1].body).toBeUndefined();
+        expect(fetchMock.mock.calls[1][1].body).toBe('{"id":1}');
+    });
+
+    it('respons non-JSON dikembalikan sebagai teks; error non-JSON memakai statusText', async () => {
+        const res = (status, text) => ({ status, ok: status < 300, statusText: 'Bad Gateway', headers: { get: () => 'text/plain' }, text: async () => text });
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(res(200, 'OK')).mockResolvedValueOnce(res(502, 'gateway')));
+        expect(await api.post('/x')).toBe('OK');
+        await expect(api.post('/x')).rejects.toMatchObject({ message: 'Bad Gateway', status: 502, data: 'gateway' });
+    });
+
+    it('401 di halaman login: sesi dibersihkan tanpa redirect; JSON rusak memakai pesan bawaan', async () => {
+        const loc = { pathname: '/auth/login', href: '/auth/login?x=1' };
+        vi.stubGlobal('location', loc);
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 401, ok: false, headers: { get: () => 'application/json' }, json: async () => { throw new SyntaxError('bad'); } }));
+        SESSION_KEYS.forEach((k) => setEncryptedItem(k, { a: 1 }));
+        await expect(api.post('/sicuti/auth/login', {})).rejects.toMatchObject({ status: 401, message: 'Sesi berakhir, silakan login kembali', data: null });
+        expect(loc.href).toBe('/auth/login?x=1');
+        SESSION_KEYS.forEach((k) => expect(localStorage.getItem(k)).toBeNull());
+    });
+
+    it('saveBlob: tautan unduh dilepas dari DOM, object URL dicabut setelah 1 detik', () => {
+        vi.useFakeTimers();
+        const revoke = vi.fn();
+        vi.stubGlobal('URL', { createObjectURL: () => 'blob:abc', revokeObjectURL: revoke });
+        const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+        saveBlob('ISI', 'a.csv');
+        expect(click).toHaveBeenCalledTimes(1);
+        expect(document.querySelector('a[download]')).toBeNull();
+        expect(revoke).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(1000);
+        expect(revoke).toHaveBeenCalledWith('blob:abc');
+        click.mockRestore();
     });
 
     it('clearAuth menghapus seluruh sesi lokal', () => {

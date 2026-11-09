@@ -16,7 +16,10 @@ import LeaveFormDialog from '@/components/leave/LeaveFormDialog.vue';
 import LeaveCompleteDocumentDialog from '@/components/leave/LeaveCompleteDocumentDialog.vue';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
-import { Plus, Search, Eye, Trash2, Pencil, FolderOpen, RotateCcw, X, Ban, FileUp } from 'lucide-vue-next';
+import { PhPlus, PhMagnifyingGlass, PhEye, PhTrash, PhPencilSimple, PhFolderOpen, PhArrowUUpLeft, PhX, PhFileArrowUp } from '@phosphor-icons/vue';
+
+// Tombol ikon di baris tabel: minimal 36px (DESIGN.md, audit-027 #6).
+const iconBtn = 'inline-flex items-center justify-center min-w-9 min-h-9 rounded-border text-surface-600 dark:text-surface-300 transition-colors motion-reduce:transition-none cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
 
 const toast = useToast();
 const confirm = useConfirm();
@@ -24,6 +27,7 @@ const router = useRouter();
 const route = useRoute();
 
 const loading = ref(false);
+const loadError = ref(false);
 const myRequests = ref([]);
 const selectedRequest = ref(null);
 const detailVisible = ref(false);
@@ -45,11 +49,15 @@ watch(searchQuery, () => {
 
 async function fetchRequests() {
     loading.value = true;
+    loadError.value = false;
     try {
         const list = await leaveService.getMyLeaves({ limit: 100 });
         myRequests.value = Array.isArray(list) ? list : [];
     } catch (err) {
         console.error('Failed to fetch leave history:', err);
+        // Gagal muat tidak boleh tampil sebagai "belum ada pengajuan"; data lama dikosongkan (audit-027 #1).
+        loadError.value = true;
+        myRequests.value = [];
     } finally {
         loading.value = false;
     }
@@ -149,6 +157,20 @@ const filteredRequests = computed(() => {
     });
 });
 
+const hasFilters = computed(() => statusFilter.value !== null || Boolean(searchQuery.value));
+
+const emptyTitle = computed(() => {
+    if (loadError.value) return 'Pengajuan belum termuat';
+    return hasFilters.value ? 'Data cuti tidak ditemukan' : 'Belum ada pengajuan cuti';
+});
+const emptyText = computed(() => {
+    if (loadError.value) return 'Daftar gagal dimuat. Tekan Coba lagi di atas.';
+    return hasFilters.value ? 'Coba ubah kata kunci pencarian atau atur ulang filter status.' : 'Anda belum pernah membuat permohonan cuti.';
+});
+
+// Catatan panjang dipotong dua baris di tabel; teks lengkapnya ada di Detail (audit-027 #14).
+const isLongNote = (req) => (lastReturnNote(req)?.notes || '').length > 70;
+
 function setQuickFilter(val) {
     first.value = 0;
     statusFilter.value = val;
@@ -183,9 +205,10 @@ function cancelRequest(req) {
     confirm.require({
         message: `Batalkan pengajuan cuti #${id}? Pengajuan yang dibatalkan tidak dapat diproses lagi.`,
         header: 'Konfirmasi Pembatalan Cuti',
-        icon: 'pi pi-exclamation-triangle',
         rejectProps: { label: 'Kembali', severity: 'secondary', outlined: true },
         acceptProps: { label: 'Ya, Batalkan Pengajuan', severity: 'danger' },
+        // Fokus awal di Kembali: Enter tidak langsung membatalkan (DESIGN.md, audit-027 #2).
+        defaultFocus: 'reject',
         accept: async () => {
             try {
                 await leaveService.cancelLeave(id);
@@ -212,85 +235,84 @@ function cancelRequest(req) {
 
 <template>
     <div class="space-y-6">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-                <h1 class="text-xl font-bold text-surface-900 dark:text-surface-100">Pengajuan Cuti</h1>
-                <p class="text-xs text-muted-color">Ajukan cuti dan pantau proses persetujuannya</p>
-            </div>
-            <Button v-if="canSubmit" data-tour="leave-add" @click="openNewLeave" size="small" class="font-semibold text-xs flex items-center gap-1.5 self-start sm:self-auto">
-                <Plus :size="14" :stroke-width="2" />
-                <span>Tambah Pengajuan</span>
-            </Button>
-        </div>
-
-        <div class="rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900 shadow-2xs overflow-hidden">
-            <div data-tour="leave-status-tabs" class="flex gap-5 px-4 border-b border-surface-200 dark:border-surface-700 overflow-x-auto scrollbar-none" role="tablist" aria-label="Saring status pengajuan">
-                <button
-                    v-for="tab in statusTabs"
-                    :key="tab.key || 'all'"
-                    type="button"
-                    role="tab"
-                    :aria-selected="statusFilter === tab.key"
-                    @click="setQuickFilter(tab.key)"
-                    :class="[
-                        'relative py-3 text-xs whitespace-nowrap flex items-center gap-1.5 cursor-pointer transition-colors',
-                        statusFilter === tab.key
-                            ? 'text-primary font-semibold after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:bg-primary after:rounded-full'
-                            : 'text-muted-color font-medium hover:text-surface-800 dark:hover:text-surface-200'
-                    ]"
-                >
-                    <span>{{ tab.label }}</span>
-                    <span
-                        :class="[
-                            'min-w-5 px-1.5 rounded-full text-[11px] leading-5 text-center tabular-nums',
-                            statusFilter === tab.key ? 'bg-primary/10 text-primary' : 'bg-surface-100 dark:bg-surface-800 text-muted-color'
-                        ]"
-                    >{{ tab.count }}</span>
-                </button>
+        <!-- Satu kartu: judul dan aksi, filter, lalu daftar (acuan 00b §6.1, audit-027 #7). -->
+        <div class="card !mb-0">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 class="text-xl font-bold text-surface-900 dark:text-surface-100">Pengajuan Cuti</h1>
+                    <p class="text-xs text-muted-color">Ajukan cuti dan pantau proses persetujuannya</p>
+                </div>
+                <Button v-if="canSubmit" data-tour="leave-add" @click="openNewLeave" size="small" class="font-semibold text-xs flex items-center gap-1.5 self-start sm:self-auto !min-h-11 sm:!min-h-9">
+                    <PhPlus :size="14" weight="bold" aria-hidden="true" />
+                    <span>Tambah Pengajuan</span>
+                </Button>
             </div>
 
-            <div class="p-3.5 sm:p-4 border-b border-surface-200/80 dark:border-surface-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div data-tour="leave-search" class="w-full sm:w-80 md:w-96 relative">
-                    <IconField iconPosition="left" class="w-full">
-                        <InputIcon class="!left-3">
-                            <Search :size="15" :stroke-width="1.8" class="text-surface-400 dark:text-surface-500" />
-                        </InputIcon>
-                        <InputText
-                            id="cari-pengajuan"
-                            name="cari-pengajuan"
-                            v-model="searchQuery"
-                            placeholder="Cari nomor ID, jenis cuti, atau alasan..."
-                            aria-label="Cari pengajuan cuti"
-                            class="w-full text-xs !pl-9 !pr-8"
-                        />
-                    </IconField>
+            <div class="mt-6 space-y-4">
+                <!-- Status sebagai pilihan cepat dengan jumlah, pola Pemantauan (audit-027 #5, #8). -->
+                <div data-tour="leave-status-tabs" role="group" aria-labelledby="leave-status-label" class="flex flex-wrap items-center gap-2">
+                    <span id="leave-status-label" class="text-xs font-medium text-surface-700 dark:text-surface-300 mr-1">Status</span>
                     <button
-                        v-if="searchQuery"
+                        v-for="tab in statusTabs"
+                        :key="tab.key || 'all'"
                         type="button"
-                        class="absolute right-2.5 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-700 dark:hover:text-surface-200 p-1 rounded-md transition-colors cursor-pointer"
-                        @click="searchQuery = ''"
-                        title="Hapus pencarian"
+                        class="inline-flex items-center gap-1.5 min-h-11 sm:min-h-9 px-3 rounded-border border text-xs font-medium cursor-pointer transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                        :class="statusFilter === tab.key
+                            ? 'border-primary bg-primary-50 text-primary-700 dark:bg-primary/10 dark:text-primary'
+                            : 'border-surface-200 dark:border-surface-700 text-surface-700 dark:text-surface-300 hover:bg-surface-100 dark:hover:bg-surface-800'"
+                        :aria-pressed="statusFilter === tab.key"
+                        @click="setQuickFilter(tab.key)"
                     >
-                        <X :size="13" :stroke-width="2" />
+                        {{ tab.label }}
+                        <span class="tabular-nums text-surface-600 dark:text-surface-400" :class="{ '!text-current': statusFilter === tab.key }">{{ loadError ? '–' : tab.count }}</span>
                     </button>
                 </div>
 
-                <div class="flex items-center gap-2">
-                    <Button
-                        v-if="statusFilter !== null || searchQuery"
-                        severity="secondary"
-                        text
-                        size="small"
-                        class="text-xs font-semibold text-surface-600 dark:text-surface-400 hover:text-surface-900 dark:hover:text-surface-100 flex items-center gap-1 px-2.5 py-1"
-                        @click="resetFilters"
-                    >
-                        <RotateCcw :size="12" :stroke-width="2" />
-                        <span>Reset</span>
-                    </Button>
+                <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+                    <div data-tour="leave-search" class="w-full sm:w-80 md:w-96">
+                        <label for="cari-pengajuan" class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1">Cari</label>
+                        <div class="relative">
+                            <IconField iconPosition="left" class="w-full">
+                                <InputIcon class="!flex items-center justify-center">
+                                    <PhMagnifyingGlass :size="14" weight="bold" aria-hidden="true" class="text-muted-color" />
+                                </InputIcon>
+                                <InputText
+                                    id="cari-pengajuan"
+                                    name="cari-pengajuan"
+                                    v-model="searchQuery"
+                                    placeholder="Nomor, jenis cuti, atau alasan"
+                                    class="w-full text-xs !min-h-11 sm:!min-h-9 !pr-10"
+                                />
+                            </IconField>
+                            <button
+                                v-if="searchQuery"
+                                type="button"
+                                :class="[iconBtn, 'absolute right-1 top-1/2 -translate-y-1/2 hover:text-surface-900 dark:hover:text-surface-0 hover:bg-surface-100 dark:hover:bg-surface-800']"
+                                aria-label="Hapus pencarian"
+                                @click="searchQuery = ''"
+                            >
+                                <PhX :size="14" weight="bold" aria-hidden="true" />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+                        <!-- Tanpa ikon: ikon panah balik di kamus berarti "dikembalikan" (audit-027 #12). -->
+                        <Button v-if="hasFilters" label="Atur ulang filter" severity="secondary" text size="small" class="text-xs !min-h-11 sm:!min-h-9" @click="resetFilters" />
+                        <p class="text-xs text-muted-color sm:pb-2" aria-live="polite">
+                            Total: <span class="font-bold text-surface-900 dark:text-surface-100">{{ loading || loadError ? '–' : filteredRequests.length }}</span> pengajuan
+                        </p>
+                    </div>
                 </div>
             </div>
 
-            <div class="hidden md:block">
+            <div v-if="loadError" role="alert" class="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-border bg-amber-100 dark:bg-amber-950/40 px-3 py-2 text-sm leading-relaxed text-amber-900 dark:text-amber-100">
+                <span>Daftar pengajuan gagal dimuat. Data lama tidak ditampilkan agar tidak keliru.</span>
+                <Button label="Coba lagi" severity="secondary" size="small" class="text-xs !min-h-11" :loading="loading" @click="fetchRequests" />
+            </div>
+
+            <!-- Tabel mulai xl; di bawahnya daftar bertumpuk agar kolom Aksi tidak terpotong (audit-027 #3, pola Akun). -->
+            <div class="hidden xl:block mt-4">
                 <DataTable
                     v-model:first="first"
                     :value="filteredRequests"
@@ -305,156 +327,118 @@ function cancelRequest(req) {
                     responsiveLayout="scroll"
                 >
                     <template #empty>
-                        <div class="text-center py-12 text-muted-color text-sm">
-                            <FolderOpen :size="40" :stroke-width="1.5" class="text-surface-300 dark:text-surface-600 mb-3 block mx-auto" />
-                            <p class="font-medium text-surface-700 dark:text-surface-300 mb-1">
-                                {{ searchQuery || statusFilter ? 'Data cuti tidak ditemukan' : 'Belum ada pengajuan cuti' }}
-                            </p>
-                            <p class="text-xs text-muted-color mb-4">
-                                {{ searchQuery || statusFilter ? 'Coba ubah kata kunci pencarian atau bersihkan filter status.' : 'Anda belum pernah membuat permohonan cuti.' }}
-                            </p>
-                            <Button
-                                v-if="searchQuery || statusFilter"
-                                severity="secondary"
-                                outlined
-                                size="small"
-                                class="text-xs font-semibold"
-                                @click="resetFilters"
-                            >
-                                Bersihkan Saringan
-                            </Button>
-                            <Button
-                                v-else-if="canSubmit"
-                                size="small"
-                                class="text-xs font-semibold"
-                                @click="openNewLeave"
-                            >
-                                Tambah Pengajuan
-                            </Button>
+                        <div class="text-center py-12 text-sm">
+                            <PhFolderOpen :size="40" weight="light" aria-hidden="true" class="text-muted-color mb-3 block mx-auto" />
+                            <p class="font-medium text-surface-700 dark:text-surface-300 mb-1">{{ emptyTitle }}</p>
+                            <p class="text-xs text-muted-color mb-4">{{ emptyText }}</p>
+                            <Button v-if="hasFilters && !loadError" label="Atur ulang filter" severity="secondary" outlined size="small" class="text-xs font-semibold !min-h-9" @click="resetFilters" />
+                            <Button v-else-if="canSubmit && !loadError" label="Tambah Pengajuan" size="small" class="text-xs font-semibold !min-h-9" @click="openNewLeave" />
                         </div>
                     </template>
 
-                    <Column header="No" style="width: 3.5rem" class="text-center">
-                        <template #body="{ index }">
-                            <span class="text-muted-color font-semibold text-xs tabular-nums">{{ first + index + 1 }}</span>
+                    <!-- Nomor pengajuan teks netral (bukan tautan) dengan tanggal diajukan; kolom "No" dihapus (audit-027 #3, #10). -->
+                    <Column field="created_at" header="Pengajuan" sortable>
+                        <template #body="{ data }">
+                            <div class="font-mono text-xs whitespace-nowrap text-surface-800 dark:text-surface-200">{{ data.id_request || data.id }}</div>
+                            <div class="text-xs text-muted-color whitespace-nowrap">Diajukan {{ formatDate(data.created_at || data.createdAt) }}</div>
                         </template>
                     </Column>
 
-                    <Column field="id_request" header="No. Pengajuan" sortable>
+                    <Column header="Jenis Cuti & Alasan" style="min-width: 10rem">
                         <template #body="{ data }">
-                            <span class="text-xs font-semibold text-primary whitespace-nowrap">{{ data.id_request || data.id }}</span>
-                        </template>
-                    </Column>
-
-                    <Column field="created_at" header="Tgl. Pengajuan" sortable>
-                        <template #body="{ data }">
-                            <span class="text-xs text-surface-600 dark:text-surface-300 tabular-nums whitespace-nowrap">
-                                {{ formatDate(data.created_at || data.createdAt) }}
-                            </span>
-                        </template>
-                    </Column>
-
-                    <Column header="Jenis Cuti & Alasan" style="min-width: 200px">
-                        <template #body="{ data }">
-                            <div class="flex flex-col gap-0.5 py-0.5">
-                                <span class="text-xs font-semibold text-surface-900 dark:text-surface-0">
-                                    {{ data.nm_leave_type || data.leaveTypeName || data.kd_leave_type || '-' }}
-                                </span>
-                                <span
-                                    class="block max-w-64 truncate text-[11px] text-muted-color"
-                                    :title="data.reason || '-'"
-                                >
-                                    {{ data.reason || '-' }}
-                                </span>
+                            <div class="font-semibold text-xs text-surface-900 dark:text-surface-0">
+                                {{ data.nm_leave_type || data.leaveTypeName || data.kd_leave_type || '-' }}
                             </div>
+                            <div class="max-w-48 truncate text-xs text-muted-color" :title="data.reason || '-'">{{ data.reason || '-' }}</div>
                         </template>
                     </Column>
 
-                    <Column field="start_date" header="Periode & Durasi" sortable>
+                    <Column field="start_date" header="Periode & Durasi" sortable style="min-width: 8rem">
                         <template #body="{ data }">
-                            <div class="flex flex-col gap-0.5 py-0.5 whitespace-nowrap">
-                                <span class="text-xs text-surface-700 dark:text-surface-200 tabular-nums font-medium">
-                                    {{ formatPeriod(data.start_date || data.startDate, data.end_date || data.endDate) }}
-                                </span>
-                                <span class="text-[11px] text-muted-color" title="Sabtu, Minggu & libur nasional tidak dihitung">
-                                    <span class="font-semibold text-surface-700 dark:text-surface-200 tabular-nums">{{ data.total_days ?? data.totalDays ?? '-' }}</span> hari kerja
-                                </span>
+                            <div class="text-xs text-surface-800 dark:text-surface-200 tabular-nums">
+                                {{ formatPeriod(data.start_date || data.startDate, data.end_date || data.endDate) }}
+                            </div>
+                            <div class="text-xs text-muted-color whitespace-nowrap" title="Sabtu, Minggu & libur nasional tidak dihitung">
+                                <span class="tabular-nums">{{ data.total_days ?? data.totalDays ?? '-' }}</span> hari kerja
                             </div>
                         </template>
                     </Column>
 
                     <Column field="status" header="Status" sortable :pt="{ headerCell: { 'data-tour': 'leave-col-status' } }">
                         <template #body="{ data }">
-                            <Tag
-                                :value="getStatusLabel(data.status)"
-                                :severity="getStatusSeverity(data.status)"
-                                class="text-xs font-semibold !rounded-full !px-2.5 !py-0.5 whitespace-nowrap"
-                            />
-                            <p
-                                v-if="data.status === 'returned' && lastReturnNote(data)?.notes"
-                                class="mt-1 max-w-48 text-[11px] leading-snug text-amber-700 dark:text-amber-300 line-clamp-2"
-                                :title="lastReturnNote(data).notes"
-                            >
-                                {{ lastReturnNote(data).notes }}
-                            </p>
+                            <Tag :value="getStatusLabel(data.status)" :severity="getStatusSeverity(data.status)" class="whitespace-nowrap" />
+                            <template v-if="data.status === 'returned' && lastReturnNote(data)?.notes">
+                                <p class="mt-1 max-w-44 text-xs leading-snug text-(--status-warn-fg) line-clamp-2">{{ lastReturnNote(data).notes }}</p>
+                                <button
+                                    v-if="isLongNote(data)"
+                                    type="button"
+                                    class="mt-0.5 min-h-6 text-xs text-primary underline underline-offset-2 cursor-pointer"
+                                    :aria-label="`Baca catatan pengembalian ${data.id_request || data.id}`"
+                                    @click="viewDetail(data)"
+                                >
+                                    Baca catatan
+                                </button>
+                            </template>
                         </template>
                     </Column>
 
-                    <Column header="Aksi" :pt="{ headerCell: { 'data-tour': 'leave-col-aksi' } }">
+                    <Column header="Aksi" style="width: 1%" :pt="{ headerCell: { 'data-tour': 'leave-col-aksi', class: 'text-right' }, bodyCell: { class: 'text-right' } }">
                         <template #body="{ data }">
-                            <div class="flex items-center justify-start gap-1 whitespace-nowrap">
-                                <Button
-                                    size="small"
-                                    severity="secondary"
-                                    text
-                                    class="text-xs font-semibold py-1 px-2.5 flex items-center gap-1"
-                                    @click="viewDetail(data)"
-                                    title="Lihat Detail"
-                                >
-                                    <Eye :size="14" />
-                                    <span>Detail</span>
-                                </Button>
-
+                            <div class="flex items-center justify-end gap-1 whitespace-nowrap">
                                 <button
-                                    v-if="documentPending(data) && ['submitted', 'pending_validation', 'returned'].includes(data.status)"
                                     type="button"
-                                    class="h-7 px-2 flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/50 rounded-md transition-colors cursor-pointer"
+                                    :class="[iconBtn, 'hover:text-primary hover:bg-surface-100 dark:hover:bg-surface-800']"
+                                    :aria-label="`Detail ${data.id_request || data.id}`"
+                                    title="Detail"
+                                    @click="viewDetail(data)"
+                                >
+                                    <PhEye :size="16" weight="bold" aria-hidden="true" />
+                                </button>
+
+                                <Button
+                                    v-if="documentPending(data) && ['submitted', 'pending_validation', 'returned'].includes(data.status)"
+                                    size="small"
+                                    severity="warn"
+                                    text
+                                    class="text-xs font-semibold flex items-center gap-1 !min-h-9 !text-(--status-warn-fg)"
                                     :title="`Unggah dokumen paling lambat ${formatDate(data.document_due_date)}`"
                                     @click="openCompleteDocument(data)"
                                 >
-                                    <FileUp :size="12" :stroke-width="2.2" />
+                                    <PhFileArrowUp :size="14" weight="bold" aria-hidden="true" />
                                     <span>Lengkapi Dokumen</span>
-                                </button>
+                                </Button>
 
-                                <button
+                                <Button
                                     v-else-if="data.status === 'returned' && canEditReturned"
-                                    type="button"
-                                    class="h-7 px-2 flex items-center gap-1 text-[11px] font-semibold text-primary hover:bg-primary/10 rounded-md transition-colors cursor-pointer"
+                                    size="small"
+                                    text
+                                    class="text-xs font-semibold flex items-center gap-1 !min-h-9"
                                     @click="openEditLeave(data)"
-                                    title="Ajukan Ulang / Ubah"
                                 >
-                                    <RotateCcw :size="12" :stroke-width="2.2" />
+                                    <PhArrowUUpLeft :size="14" weight="bold" aria-hidden="true" />
                                     <span>Ajukan Ulang</span>
-                                </button>
+                                </Button>
 
                                 <button
                                     v-else-if="data.status === 'draft' && canSubmit"
                                     type="button"
-                                    class="w-7 h-7 flex items-center justify-center rounded-md text-surface-500 dark:text-surface-400 transition-colors cursor-pointer hover:text-primary hover:bg-surface-100 dark:hover:bg-surface-800"
+                                    :class="[iconBtn, 'hover:text-primary hover:bg-surface-100 dark:hover:bg-surface-800']"
+                                    :aria-label="`Ubah draf ${data.id_request || data.id}`"
+                                    title="Ubah draf"
                                     @click="openEditLeave(data)"
-                                    title="Ubah Draf"
                                 >
-                                    <Pencil :size="15" :stroke-width="1.75" />
+                                    <PhPencilSimple :size="16" weight="bold" aria-hidden="true" />
                                 </button>
 
                                 <button
                                     v-if="['submitted', 'draft'].includes(data.status) && canCancel"
                                     type="button"
-                                    class="w-7 h-7 flex items-center justify-center rounded-md text-surface-500 dark:text-surface-400 transition-colors cursor-pointer hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50"
+                                    :class="[iconBtn, 'hover:text-(--status-danger-fg) hover:bg-(--status-danger-bg)']"
+                                    :aria-label="`Batalkan ${data.id_request || data.id}`"
+                                    title="Batalkan pengajuan"
                                     @click="cancelRequest(data)"
-                                    title="Batalkan Pengajuan"
                                 >
-                                    <Trash2 :size="15" :stroke-width="1.75" />
+                                    <PhTrash :size="16" weight="bold" aria-hidden="true" />
                                 </button>
                             </div>
                         </template>
@@ -462,134 +446,86 @@ function cancelRequest(req) {
                 </DataTable>
             </div>
 
-            <div data-tour="leave-list-mobile" class="block md:hidden p-3.5 space-y-3">
-                <div v-if="!filteredRequests.length && !loading" class="text-center py-10 text-muted-color text-sm">
-                    <FolderOpen :size="36" :stroke-width="1.5" class="text-surface-300 dark:text-surface-600 mb-2.5 block mx-auto" />
-                    <p class="font-medium text-surface-700 dark:text-surface-300 mb-1">
-                        {{ searchQuery || statusFilter ? 'Data cuti tidak ditemukan' : 'Belum ada pengajuan cuti' }}
-                    </p>
-                    <p class="text-xs text-muted-color mb-3">
-                        {{ searchQuery || statusFilter ? 'Coba ubah kata kunci pencarian atau bersihkan filter status.' : 'Anda belum pernah membuat permohonan cuti.' }}
-                    </p>
-                    <Button
-                        v-if="searchQuery || statusFilter"
-                        severity="secondary"
-                        outlined
-                        size="small"
-                        class="text-xs font-semibold"
-                        @click="resetFilters"
-                    >
-                        Bersihkan Saringan
-                    </Button>
-                    <Button
-                        v-else-if="canSubmit"
-                        size="small"
-                        class="text-xs font-semibold"
-                        @click="openNewLeave"
-                    >
-                        Tambah Pengajuan
-                    </Button>
+            <!-- Daftar HP tanpa kartu bertumpuk: baris dengan pemisah, pola Akun (audit-027 #7, #13). -->
+            <div data-tour="leave-list-mobile" class="block xl:hidden mt-4" :aria-busy="loading">
+                <p v-if="loading && !filteredRequests.length" class="py-8 text-center text-xs text-muted-color" role="status">Memuat pengajuan…</p>
+                <div v-else-if="!filteredRequests.length" class="py-8 text-center text-sm">
+                    <PhFolderOpen :size="40" weight="light" aria-hidden="true" class="text-muted-color mb-2.5 block mx-auto" />
+                    <p class="font-medium text-surface-700 dark:text-surface-300 mb-1">{{ emptyTitle }}</p>
+                    <p class="text-xs text-muted-color mb-3">{{ emptyText }}</p>
+                    <Button v-if="hasFilters && !loadError" label="Atur ulang filter" severity="secondary" outlined size="small" class="text-xs font-semibold !min-h-11" @click="resetFilters" />
+                    <Button v-else-if="canSubmit && !loadError" label="Tambah Pengajuan" size="small" class="text-xs font-semibold !min-h-11" @click="openNewLeave" />
                 </div>
 
-                <div
-                    v-for="item in paginatedMobileRequests"
-                    :key="item.id_request || item.id"
-                    class="p-4 rounded-xl border border-surface-200/80 dark:border-surface-800 bg-surface-50/50 dark:bg-surface-800/40 space-y-3 shadow-2xs"
-                >
-                    <div class="flex items-start justify-between gap-2">
-                        <div>
-                            <span class="text-xs font-semibold text-primary block">
-                                {{ item.id_request || item.id }}
-                            </span>
-                            <span class="text-xs font-medium text-surface-900 dark:text-surface-0">
-                                {{ item.nm_leave_type || item.leaveTypeName || item.kd_leave_type || '-' }}
-                            </span>
+                <ul v-else class="divide-y divide-surface-200 dark:divide-surface-700" :class="{ 'opacity-60': loading }">
+                    <li v-for="(item, i) in paginatedMobileRequests" :key="item.id_request || item.id" class="py-3 space-y-2 text-xs">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <div class="font-semibold text-sm text-surface-900 dark:text-surface-100">{{ item.nm_leave_type || item.leaveTypeName || item.kd_leave_type || '-' }}</div>
+                                <div class="font-mono text-muted-color break-all">{{ item.id_request || item.id }}</div>
+                            </div>
+                            <!-- Anchor tour kolom Status/Aksi juga di item pertama, karena header tabel tersembunyi di bawah xl. -->
+                            <Tag :value="getStatusLabel(item.status)" :severity="getStatusSeverity(item.status)" class="shrink-0" :data-tour="i === 0 ? 'leave-col-status' : undefined" />
                         </div>
-                        <Tag
-                            :value="getStatusLabel(item.status)"
-                            :severity="getStatusSeverity(item.status)"
-                            class="text-xs font-semibold !rounded-full !px-2.5 !py-0.5"
-                        />
-                    </div>
-
-                    <div class="text-xs text-surface-600 dark:text-surface-300 space-y-1.5 pt-1 border-t border-surface-200/60 dark:border-surface-700/60">
-                        <div class="flex items-center justify-between">
-                            <span class="text-muted-color">Tgl. Pengajuan:</span>
-                            <span class="tabular-nums">{{ formatDate(item.created_at || item.createdAt) }}</span>
+                        <div class="text-surface-800 dark:text-surface-200">
+                            <span class="tabular-nums">{{ formatPeriod(item.start_date || item.startDate, item.end_date || item.endDate) }}</span> · <span class="tabular-nums">{{ item.total_days ?? item.totalDays ?? '-' }}</span> hari kerja
                         </div>
-                        <div class="flex items-center justify-between">
-                            <span class="text-muted-color">Periode:</span>
-                            <span class="font-medium tabular-nums text-surface-800 dark:text-surface-200">
-                                {{ formatPeriod(item.start_date || item.startDate, item.end_date || item.endDate) }}
-                            </span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span class="text-muted-color">Durasi:</span>
-                            <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-surface-100 dark:bg-surface-800 font-semibold text-surface-800 dark:text-surface-200 tabular-nums whitespace-nowrap">
-                                {{ item.total_days ?? item.totalDays ?? '-' }} hari kerja
-                            </span>
-                        </div>
-                        <div v-if="item.reason" class="pt-1">
-                            <span class="text-muted-color block text-[11px]">Alasan:</span>
-                            <p class="text-[11px] text-surface-700 dark:text-surface-300 italic line-clamp-2">{{ item.reason }}</p>
-                        </div>
-                        <p
-                            v-if="item.status === 'returned' && lastReturnNote(item)?.notes"
-                            class="mt-1 text-[11px] leading-snug text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-2 rounded-lg"
-                        >
-                            <strong>Catatan Pengembalian:</strong> {{ lastReturnNote(item).notes }}
+                        <div class="text-muted-color">Diajukan {{ formatDate(item.created_at || item.createdAt) }}</div>
+                        <p v-if="item.reason" class="text-surface-700 dark:text-surface-300 line-clamp-2">{{ item.reason }}</p>
+                        <p v-if="item.status === 'returned' && lastReturnNote(item)?.notes" class="leading-snug text-(--status-warn-fg) bg-(--status-warn-bg) p-2 rounded-border">
+                            <strong>Catatan pengembalian:</strong> {{ lastReturnNote(item).notes }}
                         </p>
-                    </div>
-
-                    <div class="pt-2.5 border-t border-surface-200/60 dark:border-surface-700/60 flex items-center justify-end gap-2 flex-wrap">
-                        <Button
-                            size="small"
-                            severity="secondary"
-                            outlined
-                            class="text-xs font-semibold py-1 px-2.5 flex items-center gap-1"
-                            @click="viewDetail(item)"
-                        >
-                            <Eye :size="13" />
-                            <span>Detail</span>
-                        </Button>
-                        <button
-                            v-if="documentPending(item) && ['submitted', 'pending_validation', 'returned'].includes(item.status)"
-                            type="button"
-                            class="h-7 px-2.5 flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 rounded-lg transition-colors cursor-pointer"
-                            @click="openCompleteDocument(item)"
-                        >
-                            <FileUp :size="12" :stroke-width="2.2" />
-                            <span>Lengkapi Dokumen</span>
-                        </button>
-                        <button
-                            v-else-if="item.status === 'returned' && canEditReturned"
-                            type="button"
-                            class="h-7 px-2.5 flex items-center gap-1 text-[11px] font-semibold text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors cursor-pointer"
-                            @click="openEditLeave(item)"
-                        >
-                            <RotateCcw :size="12" :stroke-width="2.2" />
-                            <span>Ajukan Ulang</span>
-                        </button>
-                        <button
-                            v-else-if="item.status === 'draft' && canSubmit"
-                            type="button"
-                            class="h-7 px-2.5 flex items-center gap-1 text-[11px] font-semibold text-surface-700 dark:text-surface-200 bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 rounded-lg transition-colors cursor-pointer"
-                            @click="openEditLeave(item)"
-                        >
-                            <Pencil :size="12" :stroke-width="1.75" />
-                            <span>Ubah Draf</span>
-                        </button>
-                        <button
-                            v-if="['submitted', 'draft'].includes(item.status) && canCancel"
-                            type="button"
-                            class="h-7 px-2.5 flex items-center gap-1 text-[11px] font-semibold text-rose-600 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer"
-                            @click="cancelRequest(item)"
-                        >
-                            <Trash2 :size="12" :stroke-width="1.75" />
-                            <span>Batalkan</span>
-                        </button>
-                    </div>
-                </div>
+                        <div class="grid grid-cols-2 gap-2 pt-1" :data-tour="i === 0 ? 'leave-col-aksi' : undefined">
+                            <Button severity="secondary" outlined size="small" class="text-xs !min-h-11 flex items-center justify-center gap-1.5" :aria-label="`Detail ${item.id_request || item.id}`" @click="viewDetail(item)">
+                                <PhEye :size="14" weight="bold" aria-hidden="true" />
+                                <span>Detail</span>
+                            </Button>
+                            <Button
+                                v-if="documentPending(item) && ['submitted', 'pending_validation', 'returned'].includes(item.status)"
+                                severity="warn"
+                                outlined
+                                size="small"
+                                class="text-xs !min-h-11 flex items-center justify-center gap-1.5 !text-(--status-warn-fg)"
+                                @click="openCompleteDocument(item)"
+                            >
+                                <PhFileArrowUp :size="14" weight="bold" aria-hidden="true" />
+                                <span>Lengkapi Dokumen</span>
+                            </Button>
+                            <Button
+                                v-else-if="item.status === 'returned' && canEditReturned"
+                                outlined
+                                size="small"
+                                class="text-xs !min-h-11 flex items-center justify-center gap-1.5"
+                                @click="openEditLeave(item)"
+                            >
+                                <PhArrowUUpLeft :size="14" weight="bold" aria-hidden="true" />
+                                <span>Ajukan Ulang</span>
+                            </Button>
+                            <Button
+                                v-else-if="item.status === 'draft' && canSubmit"
+                                severity="secondary"
+                                outlined
+                                size="small"
+                                class="text-xs !min-h-11 flex items-center justify-center gap-1.5"
+                                @click="openEditLeave(item)"
+                            >
+                                <PhPencilSimple :size="14" weight="bold" aria-hidden="true" />
+                                <span>Ubah Draf</span>
+                            </Button>
+                            <Button
+                                v-if="['submitted', 'draft'].includes(item.status) && canCancel"
+                                severity="danger"
+                                outlined
+                                size="small"
+                                class="text-xs !min-h-11 flex items-center justify-center gap-1.5 !text-(--status-danger-fg)"
+                                @click="cancelRequest(item)"
+                            >
+                                <PhTrash :size="14" weight="bold" aria-hidden="true" />
+                                <span>Batalkan</span>
+                            </Button>
+                        </div>
+                    </li>
+                </ul>
 
                 <Paginator
                     v-if="filteredRequests.length > rows"

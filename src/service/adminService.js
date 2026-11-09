@@ -262,17 +262,20 @@ function describeAudit(a) {
               .map(([k, v]) => `${k}: ${v}`)
         : [];
     const label = AUDIT_ACTION_LABEL[a.action] || a.action;
-    if (a.action === 'DEACTIVATE_USER') {
-        return [
-            `${label}${a.entity_id ? ` ${a.entity_id}` : ''}`,
-            body?.status_reason ? `Alasan: ${statusReasonLabel(body.status_reason)}` : '',
-            body?.status_note ? `Keterangan: ${body.status_note}` : ''
-        ]
-            .filter(Boolean)
-            .join(' · ');
-    }
+    const title = a.entity_id ? `${label} ${a.entity_id}` : label;
+    if (a.action === 'DEACTIVATE_USER') return describeDeactivation(title, body);
     const extra = data?.reason ? ` (${data.reason})` : '';
-    return [`${label}${a.entity_id ? ` ${a.entity_id}` : ''}${extra}`, ...fields].join(' · ');
+    return [title + extra, ...fields].join(' · ');
+}
+
+function describeDeactivation(title, body) {
+    return [
+        title,
+        body?.status_reason ? `Alasan: ${statusReasonLabel(body.status_reason)}` : '',
+        body?.status_note ? `Keterangan: ${body.status_note}` : ''
+    ]
+        .filter(Boolean)
+        .join(' · ');
 }
 
 export default adminService;

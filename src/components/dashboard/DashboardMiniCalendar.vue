@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, onMounted } from 'vue';
 import { leaveService } from '@/service/leaveService';
-import { ChevronLeft, ChevronRight, Calendar } from 'lucide-vue-next';
+import { PhCaretLeft, PhCaretRight, PhCalendarBlank } from '@phosphor-icons/vue';
 
 const props = defineProps({
     approvedLeaves: {
@@ -15,6 +15,8 @@ const calYear = ref(todayDate.getFullYear());
 const calMonth = ref(todayDate.getMonth());
 const selectedCalCell = ref(null);
 const holidays = ref([]);
+// Gagal muat hari libur tidak boleh tampil sebagai "tidak ada libur" (audit-036 #1).
+const holidaysFailed = ref(false);
 
 const monthNames = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -26,7 +28,13 @@ const calMonthName = computed(() => {
 });
 
 async function loadHolidays() {
-    holidays.value = await leaveService.getHolidays(calYear.value).catch(() => []);
+    try {
+        holidays.value = await leaveService.getHolidays(calYear.value);
+        holidaysFailed.value = false;
+    } catch {
+        holidays.value = [];
+        holidaysFailed.value = true;
+    }
 }
 
 onMounted(async () => {
@@ -173,13 +181,11 @@ function getInspectorDescription(cell) {
     if (cell.isApprovedLeave) {
         return `Cuti Disetujui: ${cell.leaveInfo?.type || 'Cuti Tahunan'}`;
     }
-    if (cell.isToday) {
-        return 'Hari kerja aktif saat ini (tidak ada agenda libur)';
-    }
     if (isWeekend(cell.dateStr)) {
-        return 'Akhir pekan (Libur mingguan)';
+        return 'Akhir pekan.';
     }
-    return 'Hari kerja reguler';
+    if (holidaysFailed.value) return 'Data hari libur belum termuat.';
+    return cell.isToday ? 'Hari ini: hari kerja, tanpa cuti atau hari libur.' : 'Hari kerja, tanpa cuti atau hari libur.';
 }
 
 async function changeCalMonth(dir) {
@@ -203,32 +209,37 @@ async function changeCalMonth(dir) {
 </script>
 
 <template>
-    <div class="bg-surface-0 dark:bg-surface-900 border border-surface-200/80 dark:border-surface-800 rounded-2xl p-5 sm:p-6 shadow-[0_1px_3px_rgba(0,0,0,0.03),0_6px_16px_rgba(0,0,0,0.02)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.03)]">
-        <div class="flex items-center justify-between mb-4 pb-3 border-b border-surface-100 dark:border-surface-800">
-            <span class="font-bold text-sm tracking-tight text-surface-900 dark:text-surface-0">{{ calMonthName }}</span>
+    <!-- .card tanpa border/shadow tambahan (00b §6.1, audit-036 #5). -->
+    <section class="card !mb-0" aria-labelledby="mini-cal-title">
+        <div class="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-surface-200 dark:border-surface-800">
+            <div>
+                <h2 id="mini-cal-title" class="font-bold text-base text-surface-900 dark:text-surface-0 m-0">Kalender Saya</h2>
+                <p class="text-xs text-muted-color mt-0.5" aria-live="polite">{{ calMonthName }}</p>
+            </div>
             <div class="flex items-center gap-1">
                 <button
                     type="button"
-                    class="w-7 h-7 flex items-center justify-center rounded-lg text-surface-600 dark:text-surface-300 hover:bg-surface-100 dark:hover:bg-surface-800 active:scale-90 transition-all cursor-pointer"
+                    class="min-w-11 min-h-11 sm:min-w-9 sm:min-h-9 flex items-center justify-center rounded-border text-surface-600 dark:text-surface-300 hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors motion-reduce:transition-none cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                     @click="changeCalMonth(-1)"
                     aria-label="Bulan sebelumnya"
-                    title="Bulan Sebelumnya"
+                    title="Bulan sebelumnya"
                 >
-                    <ChevronLeft :size="16" :stroke-width="2" />
+                    <PhCaretLeft :size="16" weight="bold" aria-hidden="true" />
                 </button>
                 <button
                     type="button"
-                    class="w-7 h-7 flex items-center justify-center rounded-lg text-surface-600 dark:text-surface-300 hover:bg-surface-100 dark:hover:bg-surface-800 active:scale-90 transition-all cursor-pointer"
+                    class="min-w-11 min-h-11 sm:min-w-9 sm:min-h-9 flex items-center justify-center rounded-border text-surface-600 dark:text-surface-300 hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors motion-reduce:transition-none cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                     @click="changeCalMonth(1)"
                     aria-label="Bulan berikutnya"
-                    title="Bulan Berikutnya"
+                    title="Bulan berikutnya"
                 >
-                    <ChevronRight :size="16" :stroke-width="2" />
+                    <PhCaretRight :size="16" weight="bold" aria-hidden="true" />
                 </button>
             </div>
         </div>
 
-        <div class="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-surface-400 dark:text-surface-500 uppercase tracking-wider mb-2">
+        <!-- Nama hari biasa, bukan kapital berjarak lebar (R-06, audit-036 #6). -->
+        <div class="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-muted-color mb-1" aria-hidden="true">
             <span>Min</span><span>Sen</span><span>Sel</span><span>Rab</span><span>Kam</span><span>Jum</span><span>Sab</span>
         </div>
 
@@ -236,19 +247,19 @@ async function changeCalMonth(dir) {
             <div
                 v-for="(cell, idx) in calendarDays"
                 :key="idx"
-                class="h-8 flex items-center justify-center"
+                class="h-11 sm:h-9 flex items-center justify-center"
             >
                 <button
                     v-if="!cell.isBlank"
                     type="button"
                     @click="selectDate(cell)"
-                    class="h-8 w-8 mx-auto flex items-center justify-center rounded-lg text-xs tabular-nums transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:focus-visible:ring-offset-surface-900 cursor-pointer select-none"
+                    class="h-11 w-full max-w-11 sm:h-9 sm:max-w-9 mx-auto flex items-center justify-center rounded-border text-xs tabular-nums transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:focus-visible:ring-offset-surface-900 cursor-pointer select-none"
                     :class="[
                         selectedCalCell?.dateStr === cell.dateStr
                             ? 'ring-2 ring-primary ring-offset-2 dark:ring-offset-surface-900 font-bold z-10'
                             : '',
                         cell.isToday
-                            ? 'bg-primary text-white shadow-xs'
+                            ? 'bg-primary text-primary-contrast'
                             : cell.isApprovedLeave
                               ? selectedCalCell?.dateStr === cell.dateStr
                                   ? 'bg-emerald-600 text-white font-semibold'
@@ -259,97 +270,55 @@ async function changeCalMonth(dir) {
                                     : 'bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 font-semibold border border-rose-200/80 dark:border-rose-900/60'
                                 : selectedCalCell?.dateStr === cell.dateStr
                                   ? 'bg-surface-200 dark:bg-surface-700 text-surface-900 dark:text-surface-0'
-                                  : 'text-surface-700 dark:text-surface-300 hover:bg-surface-100 dark:hover:bg-surface-800 active:scale-90'
+                                  : 'text-surface-700 dark:text-surface-300 hover:bg-surface-100 dark:hover:bg-surface-800'
                     ]"
                     :aria-pressed="selectedCalCell?.dateStr === cell.dateStr"
                     :aria-label="formatInspectorDate(cell.dateStr)"
-                    :title="cell.isApprovedLeave ? `Cuti Disetujui: ${cell.leaveInfo?.type}` : (cell.holidayName || (cell.isToday ? 'Hari Ini' : ''))"
+                    :title="cell.isApprovedLeave ? `Cuti disetujui: ${cell.leaveInfo?.type}` : (cell.holidayName || (cell.isToday ? 'Hari ini' : ''))"
                 >
                     {{ cell.day }}
                 </button>
             </div>
         </div>
 
-        <div class="mt-4 pt-3.5 border-t border-surface-100 dark:border-surface-800/80 flex items-center justify-between text-[11px] text-surface-500 dark:text-surface-400">
-            <div class="flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full bg-primary inline-block"></span>
-                <span>Hari Ini</span>
-            </div>
-            <div class="flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-                <span>Cuti Disetujui</span>
-            </div>
-            <div class="flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full bg-rose-500 inline-block"></span>
-                <span>Libur Resmi</span>
-            </div>
+        <div class="mt-3 pt-3 border-t border-surface-200 dark:border-surface-800 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-surface-700 dark:text-surface-300">
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-primary" aria-hidden="true"></span>Hari ini</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500" aria-hidden="true"></span>Cuti disetujui</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-rose-500" aria-hidden="true"></span>Hari libur</span>
         </div>
+        <p v-if="holidaysFailed" class="mt-2 text-xs text-muted-color">Hari libur {{ calYear }} belum termuat.</p>
 
-        <div class="mt-3.5 pt-3 border-t border-surface-100 dark:border-surface-800/80">
+        <div class="mt-3 pt-3 border-t border-surface-200 dark:border-surface-800" aria-live="polite">
             <transition
                 mode="out-in"
-                enter-active-class="transition-all duration-200 ease-out"
-                enter-from-class="opacity-0 translate-y-1"
-                enter-to-class="opacity-100 translate-y-0"
-                leave-active-class="transition-all duration-150 ease-in"
-                leave-from-class="opacity-100 translate-y-0"
-                leave-to-class="opacity-0 -translate-y-1"
+                enter-active-class="transition-opacity duration-150 motion-reduce:transition-none"
+                enter-from-class="opacity-0"
+                leave-active-class="transition-opacity duration-100 motion-reduce:transition-none"
+                leave-to-class="opacity-0"
             >
                 <div
                     v-if="selectedCalCell"
                     :key="selectedCalCell.dateStr"
-                    class="rounded-xl p-3 bg-surface-50/80 dark:bg-surface-800/40 border border-surface-200/60 dark:border-surface-700/50 flex flex-col gap-1.5"
+                    class="rounded-border p-3 bg-surface-50 dark:bg-surface-800/40 flex flex-col gap-1.5"
                 >
-                    <div class="flex items-center justify-between gap-2">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
                         <span class="text-xs font-semibold text-surface-900 dark:text-surface-100 flex items-center gap-1.5">
-                            <Calendar :size="13" class="text-surface-400 dark:text-surface-500 shrink-0" />
+                            <PhCalendarBlank :size="14" weight="bold" aria-hidden="true" class="text-muted-color shrink-0" />
                             <span>{{ formatInspectorDate(selectedCalCell.dateStr) }}</span>
                         </span>
-
-                        <span
-                            v-if="selectedCalCell.isHoliday"
-                            class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/60"
-                        >
-                            {{ selectedCalCell.holidayInfo?.typeLabel || 'Libur Resmi' }}
-                        </span>
-                        <span
-                            v-else-if="selectedCalCell.isApprovedLeave"
-                            class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60"
-                        >
-                            Cuti Disetujui
-                        </span>
-                        <span
-                            v-else-if="selectedCalCell.isToday"
-                            class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-300 border border-primary/20"
-                        >
-                            Hari Ini
-                        </span>
-                        <span
-                            v-else-if="isWeekend(selectedCalCell.dateStr)"
-                            class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-surface-200/60 text-surface-600 dark:bg-surface-700/60 dark:text-surface-300"
-                        >
-                            Akhir Pekan
-                        </span>
-                        <span
-                            v-else
-                            class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-surface-200/60 text-surface-600 dark:bg-surface-700/60 dark:text-surface-300"
-                        >
-                            Hari Kerja
-                        </span>
+                        <Tag v-if="selectedCalCell.isHoliday" :value="selectedCalCell.holidayInfo?.typeLabel || 'Hari libur'" severity="danger" class="text-xs" />
+                        <Tag v-else-if="selectedCalCell.isApprovedLeave" value="Cuti disetujui" severity="success" class="text-xs" />
+                        <Tag v-else-if="selectedCalCell.isToday" value="Hari ini" severity="info" class="text-xs" />
                     </div>
-
-                    <p class="text-xs text-surface-600 dark:text-surface-400 font-normal leading-relaxed">
+                    <p class="text-xs text-surface-700 dark:text-surface-300 leading-relaxed m-0">
                         {{ getInspectorDescription(selectedCalCell) }}
                     </p>
                 </div>
 
-                <div
-                    v-else
-                    class="text-center py-2.5 text-xs text-surface-400 dark:text-surface-500 italic"
-                >
-                    Klik salah satu tanggal untuk melihat keterangan agenda atau hari libur.
-                </div>
+                <p v-else class="text-center py-2.5 text-xs text-muted-color m-0">
+                    Pilih tanggal untuk melihat keterangannya.
+                </p>
             </transition>
         </div>
-    </div>
+    </section>
 </template>

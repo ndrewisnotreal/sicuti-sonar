@@ -61,3 +61,9 @@ Thumbs.db
 # Tooling Caches
 .eslintcache
 .prettiercache
+
+# oh-my-claudecode runtime state (juga mencegah Tailwind memicu reload dev server)
+.omc/
+
+laporan/
+anti-slop/

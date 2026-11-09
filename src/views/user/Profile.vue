@@ -1,18 +1,23 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { currentUser, persistCurrentUser } from '@/service/sicutiService';
 import { authService } from '@/service/authService';
 import api, { assetUrl } from '@/service/api';
 import { useToast } from 'primevue/usetoast';
-import { Mail, Save, X } from 'lucide-vue-next';
+import { useConfirm } from 'primevue/useconfirm';
+import { PhFloppyDisk, PhX } from '@phosphor-icons/vue';
 import { passwordChecks as checkPassword } from '@/utils/passwordRules';
 import ProfileAvatarSection from '@/components/user/ProfileAvatarSection.vue';
 import ProfilePasswordSection from '@/components/user/ProfilePasswordSection.vue';
 const router = useRouter();
 const toast = useToast();
+const confirm = useConfirm();
 const profile = ref(null);
 const saving = ref(false);
+const loadError = ref(false);
+const errors = ref({});
+let confirming = false;
 
 const form = ref({
     email: '',
@@ -67,11 +72,22 @@ const isDirty = computed(() => contactChanged.value || photoChanged.value || pas
 const passwordChecks = computed(() => checkPassword(form.value.newPassword));
 
 async function loadProfile() {
+    loadError.value = false;
     try {
         const res = await api.get('/master/user/profile');
         profile.value = res?.data || null;
     } catch {
+        // Gagal muat tidak diam-diam: isian berasal dari sesi login (audit-031 #2).
+        loadError.value = true;
         profile.value = null;
+    }
+}
+
+async function retryLoad() {
+    await loadProfile();
+    if (!loadError.value) {
+        syncSessionUser();
+        resetForm();
     }
 }
 
@@ -88,10 +104,11 @@ function resetForm() {
 function cancelChanges() {
     clearPendingPhoto();
     removePhoto.value = false;
+    errors.value = {};
     resetForm();
 }
 
-function handleClose() {
+function leave() {
     cancelChanges();
     if (window.history.state?.back) {
         router.back();
@@ -100,8 +117,28 @@ function handleClose() {
     }
 }
 
+// Perubahan yang belum disimpan tidak hilang diam-diam lewat Esc, klik luar, atau Batal (audit-031 #4).
+function handleClose() {
+    if (confirming || saving.value) return;
+    if (!isDirty.value) return leave();
+    confirming = true;
+    confirm.require({
+        header: 'Buang perubahan?',
+        message: 'Perubahan profil yang belum disimpan akan hilang.',
+        acceptLabel: 'Buang perubahan',
+        rejectLabel: 'Lanjut mengedit',
+        acceptProps: { severity: 'danger' },
+        rejectProps: { severity: 'secondary', outlined: true },
+        defaultFocus: 'reject',
+        accept: leave,
+        onHide: () => {
+            confirming = false;
+        }
+    });
+}
+
 function handleKeyDown(event) {
-    if (event.key === 'Escape') {
+    if (event.key === 'Escape' && !confirming) {
         handleClose();
     }
 }
@@ -135,30 +172,47 @@ function syncSessionUser() {
     persistCurrentUser();
 }
 
+// Pesan field hilang begitu field itu diubah.
+watch(
+    () => ({ ...form.value }),
+    (now, before) => {
+        for (const k of Object.keys(errors.value)) if (now[k] !== before[k]) delete errors.value[k];
+    }
+);
+
+const FIELD_IDS = { email: 'profile-email', newPassword: 'profile-new-password', confirmPassword: 'profile-confirm-password', currentPassword: 'profile-current-password' };
+
+// Kesalahan ditulis di bawah field dan fokus pindah ke field pertama yang salah, bukan toast (audit-031 #3).
 function validate() {
-    if (!form.value.email.trim()) return 'Isi alamat email untuk menerima notifikasi cuti.';
+    const e = {};
+    const email = form.value.email.trim();
+    if (!email) e.email = 'Isi alamat email untuk menerima notifikasi cuti.';
+    else if (!/^\S+@\S+\.\S+$/.test(email)) e.email = 'Format email belum benar, contoh nama@inalum.co.id.';
     if (passwordStarted.value) {
         const failed = passwordChecks.value.find((c) => !c.ok);
-        if (failed) return `Kata sandi baru belum memenuhi syarat: ${failed.label.toLowerCase()}.`;
-        if (form.value.newPassword !== form.value.confirmPassword) return 'Konfirmasi kata sandi tidak sama dengan kata sandi baru.';
-        if (!form.value.currentPassword) return 'Isi kata sandi saat ini untuk mengganti kata sandi.';
+        if (failed) e.newPassword = `Belum memenuhi syarat: ${failed.label.toLowerCase()}.`;
+        if (form.value.newPassword !== form.value.confirmPassword) e.confirmPassword = 'Belum sama dengan kata sandi baru.';
+        if (!form.value.currentPassword) e.currentPassword = 'Isi kata sandi saat ini untuk mengganti kata sandi.';
     }
-    return null;
+    return e;
 }
 
 async function saveChanges() {
     if (saving.value) return;
-    const problem = validate();
-    if (problem) {
-        toast.add({ severity: 'warn', summary: 'Periksa kembali isian', detail: problem, life: 4000 });
+    errors.value = validate();
+    const firstField = Object.keys(FIELD_IDS).find((k) => errors.value[k]);
+    if (firstField) {
+        nextTick(() => document.getElementById(FIELD_IDS[firstField])?.focus());
         return;
     }
+    const saved = [];
 
     saving.value = true;
     try {
         if (contactChanged.value) {
             const res = await api.put('/master/user/profile', { email: form.value.email.trim(), no_hp: form.value.phone.trim() });
             profile.value = res?.data || profile.value;
+            saved.push('kontak');
         }
         if (pendingPhoto.value) {
             const fd = new FormData();
@@ -166,10 +220,12 @@ async function saveChanges() {
             const res = await api.upload('/master/user/profile/photo', fd);
             profile.value = res?.data || profile.value;
             clearPendingPhoto();
+            saved.push('foto');
         } else if (removePhoto.value) {
             const res = await api.delete('/master/user/profile/photo', {});
             profile.value = res?.data || profile.value;
             removePhoto.value = false;
+            saved.push('foto');
         }
         if (passwordStarted.value) {
             await authService.changePassword({
@@ -183,7 +239,9 @@ async function saveChanges() {
         toast.add({ severity: 'success', summary: 'Perubahan disimpan', detail: 'Profil Anda sudah diperbarui.', life: 3000 });
     } catch (err) {
         syncSessionUser();
-        toast.add({ severity: 'error', summary: 'Perubahan gagal disimpan', detail: err.message || 'Coba lagi beberapa saat.', life: 4500 });
+        // Simpan bertahap: sebutkan bagian yang sudah tersimpan agar tidak dikira gagal semua (audit-031 #9).
+        const done = saved.length ? ` Yang sudah tersimpan: ${saved.join(' dan ')}.` : '';
+        toast.add({ severity: 'error', summary: 'Perubahan gagal disimpan', detail: `${err.message || 'Coba lagi beberapa saat.'}${done}`, life: 6000 });
     } finally {
         saving.value = false;
     }
@@ -203,38 +261,39 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+    <!-- Mask polos seperti Dialog PrimeVue, tanpa blur kaca (audit-031 #5). -->
     <div
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto profile-backdrop"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-black/40"
         @click.self="handleClose"
     >
-
         <div
-            class="relative w-full max-w-[580px] max-h-[90vh] flex flex-col rounded-2xl border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900 shadow-2xl overflow-hidden text-surface-900 dark:text-surface-0 my-auto animate-scale-in"
+            class="relative w-full max-w-[580px] max-h-[90vh] flex flex-col rounded-xl bg-surface-0 dark:bg-surface-900 shadow-xl overflow-hidden text-surface-900 dark:text-surface-0 my-auto profile-enter"
             role="dialog"
             aria-modal="true"
             aria-labelledby="profile-dialog-title"
         >
-            <div class="px-6 py-4 border-b border-surface-200 dark:border-surface-800 flex items-center justify-between bg-surface-50/50 dark:bg-surface-800/30 shrink-0">
+            <div class="px-6 pt-5 pb-3 flex items-start justify-between gap-3 shrink-0">
                 <div>
-                    <h1 id="profile-dialog-title" class="text-base font-bold tracking-tight text-surface-900 dark:text-surface-0">
-                        Profil &amp; Pengaturan Akun
-                    </h1>
-                    <p class="text-xs text-muted-color mt-0.5">
-                        Data kepegawaian resmi dan konfigurasi akun portal SiCuti.
-                    </p>
+                    <h1 id="profile-dialog-title" class="text-lg font-bold text-surface-900 dark:text-surface-0">Profil &amp; Pengaturan Akun</h1>
+                    <p class="text-xs text-muted-color mt-0.5">Data kepegawaian dan kontak notifikasi akun Lebur Anda.</p>
                 </div>
                 <button
                     type="button"
-                    class="rounded-lg p-1.5 text-muted-color hover:text-surface-900 dark:hover:text-surface-0 hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors cursor-pointer"
-                    title="Tutup (ESC)"
+                    class="inline-flex items-center justify-center shrink-0 min-w-11 min-h-11 sm:min-w-9 sm:min-h-9 rounded-border text-muted-color hover:text-surface-900 dark:hover:text-surface-0 hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors motion-reduce:transition-none cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                    title="Tutup (Esc)"
                     aria-label="Tutup dialog profil"
                     @click="handleClose"
                 >
-                    <X :size="18" />
+                    <PhX :size="16" weight="bold" aria-hidden="true" />
                 </button>
             </div>
 
-            <form id="profile-form" class="p-6 overflow-y-auto space-y-5 text-xs flex-1" @submit.prevent="saveChanges">
+            <form id="profile-form" novalidate class="px-6 pb-6 pt-2 overflow-y-auto space-y-5 text-xs flex-1" @submit.prevent="saveChanges">
+                <div v-if="loadError" role="alert" class="flex flex-wrap items-center justify-between gap-2 rounded-border bg-amber-100 dark:bg-amber-950/40 px-3 py-2 text-sm leading-relaxed text-amber-900 dark:text-amber-100">
+                    <span>Data profil terbaru gagal dimuat. Isian di bawah berasal dari sesi login; periksa sebelum menyimpan.</span>
+                    <Button type="button" label="Coba lagi" severity="secondary" size="small" class="text-xs !min-h-11 sm:!min-h-9" @click="retryLoad" />
+                </div>
+
                 <ProfileAvatarSection
                     :name="view.name"
                     :role-name="view.roleName || view.position"
@@ -250,15 +309,12 @@ onBeforeUnmount(() => {
                     @cancel-photo="onCancelPhoto"
                 />
 
-                <div class="space-y-3 pt-1">
-                    <h3 class="text-xs font-bold text-surface-900 dark:text-surface-100 uppercase tracking-wider flex items-center gap-1.5">
-                        <Mail :size="14" class="text-primary" />
-                        <span>Kontak Notifikasi</span>
-                    </h3>
+                <div class="space-y-3 pt-4 border-t border-surface-200 dark:border-surface-700">
+                    <h2 class="text-sm font-semibold text-surface-900 dark:text-surface-100">Kontak notifikasi</h2>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                         <div>
                             <label for="profile-email" class="block font-medium text-surface-700 dark:text-surface-300 mb-1">
-                                Email Kantor <span class="text-rose-500">*</span>
+                                Email kantor <span class="text-(--status-danger-fg)" aria-hidden="true">*</span>
                             </label>
                             <InputText
                                 id="profile-email"
@@ -266,8 +322,12 @@ onBeforeUnmount(() => {
                                 type="email"
                                 placeholder="nama@inalum.co.id"
                                 class="w-full text-xs"
-                                required
+                                aria-required="true"
+                                :invalid="Boolean(errors.email)"
+                                :aria-invalid="errors.email ? 'true' : undefined"
+                                :aria-describedby="errors.email ? 'profile-email-error' : undefined"
                             />
+                            <p v-if="errors.email" id="profile-email-error" class="text-xs text-(--status-danger-fg) mt-1">{{ errors.email }}</p>
                         </div>
                         <div>
                             <label for="profile-phone" class="block font-medium text-surface-700 dark:text-surface-300 mb-1">
@@ -277,23 +337,23 @@ onBeforeUnmount(() => {
                                 id="profile-phone"
                                 v-model="form.phone"
                                 type="tel"
-                                placeholder="081234567890"
+                                placeholder="Contoh: 081234567890"
                                 class="w-full text-xs"
                             />
                         </div>
                     </div>
                 </div>
 
-                <ProfilePasswordSection v-model="form" />
+                <ProfilePasswordSection v-model="form" :errors="errors" />
             </form>
 
-            <div class="px-6 py-3.5 border-t border-surface-200 dark:border-surface-800 flex items-center justify-end gap-2 bg-surface-50/50 dark:bg-surface-800/30 shrink-0">
+            <div class="px-6 py-3 border-t border-surface-200 dark:border-surface-700 flex items-center justify-end gap-2 shrink-0">
                 <Button
                     type="button"
                     severity="secondary"
                     outlined
                     size="small"
-                    class="font-semibold text-xs"
+                    class="font-semibold text-xs !min-h-11 sm:!min-h-9"
                     @click="handleClose"
                 >
                     Batal
@@ -302,12 +362,12 @@ onBeforeUnmount(() => {
                     type="submit"
                     form="profile-form"
                     size="small"
-                    class="font-semibold text-xs flex items-center gap-1.5"
+                    class="font-semibold text-xs flex items-center gap-1.5 !min-h-11 sm:!min-h-9"
                     :loading="saving"
                     :disabled="!isDirty"
                     :title="isDirty ? undefined : 'Belum ada perubahan untuk disimpan'"
                 >
-                    <Save :size="13" />
+                    <PhFloppyDisk :size="14" weight="bold" aria-hidden="true" />
                     <span>Simpan Perubahan</span>
                 </Button>
             </div>
@@ -316,24 +376,24 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.profile-backdrop {
-    background-color: rgba(15, 23, 42, 0.32);
-    backdrop-filter: blur(16px) saturate(190%);
-    -webkit-backdrop-filter: blur(16px) saturate(190%);
-}
-
-@keyframes modalScaleIn {
+@keyframes profileEnter {
     from {
         opacity: 0;
-        transform: scale(0.96) translateY(6px);
+        transform: translateY(6px);
     }
     to {
         opacity: 1;
-        transform: scale(1) translateY(0);
+        transform: none;
     }
 }
 
-.animate-scale-in {
-    animation: modalScaleIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+.profile-enter {
+    animation: profileEnter 0.18s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .profile-enter {
+        animation: none;
+    }
 }
 </style>

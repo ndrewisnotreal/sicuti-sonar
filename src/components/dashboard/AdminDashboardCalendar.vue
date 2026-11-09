@@ -1,14 +1,10 @@
 <template>
     <div class="card mb-0 flex flex-col justify-between p-5">
         <div>
-            <div class="flex items-center justify-between mb-4 pb-3 border-b border-surface-200 dark:border-surface-800">
-                <div>
-                    <h3 class="font-bold text-base text-surface-900 dark:text-surface-0 m-0">
-                        Kalender Cuti
-                    </h3>
-                    <p class="text-xs text-muted-color mt-0.5">Jadwal cuti divisi & agenda libur resmi</p>
-                </div>
-                <Tag :value="`Tahun ${CURRENT_YEAR}`" severity="secondary" class="font-semibold text-xs" />
+            <!-- Tag "Tahun" statis dihapus: kalender bisa digeser ke tahun lain (audit-034 #7). -->
+            <div class="mb-4 pb-3 border-b border-surface-200 dark:border-surface-800">
+                <h2 class="font-bold text-base text-surface-900 dark:text-surface-0 m-0">Kalender Cuti</h2>
+                <p class="text-xs text-muted-color mt-0.5">Cuti disetujui dan hari libur. Pilih tanggal untuk melihat siapa yang cuti.</p>
             </div>
 
             <div class="admin-sakai-calendar">
@@ -49,10 +45,10 @@
             <div class="mt-3 p-3 rounded-lg bg-surface-50 dark:bg-surface-800/40 border border-surface-200/80 dark:border-surface-700/60">
                 <div class="flex items-center justify-between mb-2">
                     <div class="flex items-center gap-1.5 text-xs font-semibold text-surface-800 dark:text-surface-100">
-                        <CalendarDays :size="14" class="text-primary" />
+                        <PhCalendarDots :size="14" weight="bold" aria-hidden="true" class="text-primary" />
                         <span>{{ formattedSelectedDate }}</span>
                     </div>
-                    <Tag v-if="selectedDateEvents.isHoliday" :value="selectedDateEvents.holidayName" severity="danger" class="text-[11px] py-0 px-1.5" />
+                    <Tag v-if="selectedDateEvents.isHoliday" :value="selectedDateEvents.holidayName" severity="danger" class="text-xs py-0 px-1.5" />
                 </div>
 
                 <div v-if="selectedDateEvents.leaves.length > 0" class="space-y-1.5 max-h-24 overflow-y-auto pr-1">
@@ -62,41 +58,44 @@
                         class="flex items-center justify-between text-xs py-1 px-2 rounded-md bg-surface-0 dark:bg-surface-900 border border-surface-200 dark:border-surface-700/60"
                     >
                         <div class="flex items-center gap-2 truncate">
-                            <div class="w-5 h-5 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center shrink-0">
+                            <div class="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center shrink-0">
                                 {{ item.userName?.charAt(0) || 'U' }}
                             </div>
                             <span class="font-medium text-surface-800 dark:text-surface-200 truncate">{{ item.userName }}</span>
                         </div>
-                        <Tag :value="item.leaveTypeName" severity="warn" class="text-[9.5px] py-0 px-1.5 shrink-0" />
+                        <Tag :value="item.leaveTypeName" severity="warn" class="text-xs py-0 px-1.5 shrink-0" />
                     </div>
                 </div>
-                <div v-else-if="!selectedDateEvents.isHoliday" class="text-[11px] text-muted-color italic">
-                    Tidak ada karyawan cuti atau libur nasional pada tanggal ini.
+                <div v-else-if="!dataReady" class="text-xs text-muted-color">
+                    Data cuti belum tersedia.
+                </div>
+                <div v-else-if="!selectedDateEvents.isHoliday" class="text-xs text-muted-color">
+                    Tidak ada cuti atau hari libur pada tanggal ini.
                 </div>
             </div>
         </div>
 
-        <div class="mt-4 pt-3 border-t border-surface-100 dark:border-surface-800 flex items-center justify-between text-xs text-muted-color">
-            <div class="flex items-center gap-1.5">
-                <span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block shadow-2xs"></span>
-                <span class="text-[11.5px] font-medium text-surface-700 dark:text-surface-300">Cuti karyawan</span>
-            </div>
-            <div class="flex items-center gap-1.5">
-                <span class="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block shadow-2xs"></span>
-                <span class="text-[11.5px] font-medium text-surface-700 dark:text-surface-300">Hari libur</span>
-            </div>
-            <div class="flex items-center gap-1.5">
-                <span class="w-2.5 h-2.5 rounded-full bg-primary-500 inline-block shadow-2xs"></span>
-                <span class="text-[11.5px] font-medium text-surface-700 dark:text-surface-300">Hari ini / Terpilih</span>
-            </div>
+        <div class="mt-4 pt-3 border-t border-surface-100 dark:border-surface-800 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs font-medium text-surface-700 dark:text-surface-300">
+            <span class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-500" aria-hidden="true"></span>
+                Cuti karyawan
+            </span>
+            <span class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-rose-500" aria-hidden="true"></span>
+                Hari libur
+            </span>
+            <span class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-primary" aria-hidden="true"></span>
+                Tanggal dipilih
+            </span>
         </div>
     </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue';
-import { CURRENT_YEAR, getUser, sicutiState } from '@/service/sicutiService';
-import { CalendarDays } from 'lucide-vue-next';
+import { getUser, sicutiState } from '@/service/sicutiService';
+import { PhCalendarDots } from '@phosphor-icons/vue';
 
 const props = defineProps({
     divisionRequests: {
@@ -106,6 +105,11 @@ const props = defineProps({
     adminDivision: {
         type: String,
         default: ''
+    },
+    // false saat data memuat/gagal: "tidak ada cuti" belum tentu benar (audit-034 #3).
+    dataReady: {
+        type: Boolean,
+        default: true
     }
 });
 
@@ -209,12 +213,17 @@ const calendarPt = computed(() => ({
     root: { class: '!border-0 !bg-transparent w-full shadow-none p-0' },
     panel: { class: '!border-0 !bg-transparent w-full shadow-none p-0' },
     header: { class: '!border-b border-surface-200 dark:border-surface-800 !pb-2.5 !mb-2.5 !bg-transparent' },
+    // Target sentuh 44px di HP (audit-034 #4).
+    pcPrevButton: { root: { class: '!min-w-11 !min-h-11 sm:!min-w-10 sm:!min-h-10' } },
+    pcNextButton: { root: { class: '!min-w-11 !min-h-11 sm:!min-w-10 sm:!min-h-10' } },
+    selectMonth: { class: '!min-h-11 sm:!min-h-9' },
+    selectYear: { class: '!min-h-11 sm:!min-h-9' },
     table: { class: 'w-full' },
     tableHeaderCell: { class: 'text-xs font-semibold text-muted-color pb-1.5' },
     dayView: { class: 'w-full' },
     day: ({ context }) => ({
         class: [
-            '!w-full !h-8.5 !rounded-md !transition-colors !p-0 flex flex-col items-center justify-center cursor-pointer',
+            '!w-full !h-11 sm:!h-8.5 !rounded-md !transition-colors !p-0 flex flex-col items-center justify-center cursor-pointer',
             getDayCellClass(context)
         ]
     })

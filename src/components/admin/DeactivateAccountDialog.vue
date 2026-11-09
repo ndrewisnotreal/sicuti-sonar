@@ -7,13 +7,14 @@
         :breakpoints="{ '640px': '92vw' }"
         @update:visible="emit('update:visible', $event)"
     >
-        <div class="space-y-3 pt-1 text-xs">
+        <div class="space-y-4 pt-1 text-sm">
             <p class="text-surface-700 dark:text-surface-300">
                 {{ user?.nama || user?.username }} tidak bisa login sampai akunnya diaktifkan lagi. Alasannya tercatat di riwayat status dan Audit Trail.
             </p>
+            <!-- Label terhubung, kesalahan di bawah field dan fokus ke field (audit-024 #3, #4). -->
             <div>
-                <label for="deact-reason" class="block font-medium mb-1">
-                    Alasan Nonaktif <span class="text-rose-500">*</span>
+                <label for="deact-reason" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">
+                    Alasan nonaktif <span class="text-(--status-danger-fg)" aria-hidden="true">*</span>
                 </label>
                 <Select
                     inputId="deact-reason"
@@ -22,20 +23,18 @@
                     optionLabel="label"
                     optionValue="value"
                     placeholder="Pilih alasan"
-                    class="w-full text-xs"
+                    class="w-full"
+                    :invalid="Boolean(error)"
+                    :aria-describedby="error ? 'deact-error' : undefined"
                 />
             </div>
             <div>
-                <label class="block font-medium mb-1">
-                    Keterangan<span v-if="reason === 'LAINNYA'" class="text-rose-500"> *</span>
+                <label for="deact-note" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">
+                    Keterangan<span v-if="reason === 'LAINNYA'" class="text-(--status-danger-fg)" aria-hidden="true"> *</span>
                 </label>
-                <InputText
-                    v-model="note"
-                    class="w-full text-xs"
-                    placeholder="Mis. kontrak berakhir 30 Sep 2026"
-                />
+                <InputText id="deact-note" v-model="note" class="w-full" placeholder="Mis. kontrak berakhir 30 Sep 2026" :aria-describedby="error ? 'deact-error' : undefined" />
             </div>
-            <small v-if="error" class="text-rose-500 text-[11px] block">{{ error }}</small>
+            <p v-if="error" id="deact-error" role="alert" class="text-xs text-(--status-danger-fg)">{{ error }}</p>
         </div>
         <template #footer>
             <div class="flex justify-end gap-2 pt-2">
@@ -54,7 +53,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { nextTick, ref, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { adminService } from '@/service/adminService';
 import { STATUS_REASON_OPTIONS, statusFormProblem } from '@/service/statusReason';
@@ -105,7 +104,11 @@ async function handleConfirm() {
     if (!props.user?.uid_user_system) return;
 
     error.value = statusFormProblem({ reason: reason.value, note: note.value }) || '';
-    if (error.value) return;
+    if (error.value) {
+        await nextTick();
+        document.getElementById(reason.value ? 'deact-note' : 'deact-reason')?.focus();
+        return;
+    }
 
     saving.value = true;
     try {

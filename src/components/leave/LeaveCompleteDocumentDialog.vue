@@ -3,7 +3,7 @@ import { ref, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { leaveService } from '@/service/leaveService';
 import { formatDate } from '@/service/sicutiService';
-import { FileUp } from 'lucide-vue-next';
+import { PhFileArrowUp } from '@phosphor-icons/vue';
 
 const props = defineProps({
     visible: {
@@ -113,7 +113,7 @@ async function submitDocument() {
                     :disabled="!docFile"
                     @click="submitDocument"
                 >
-                    <FileUp :size="14" />
+                    <PhFileArrowUp :size="14" weight="bold" aria-hidden="true" />
                     <span>Unggah Dokumen</span>
                 </Button>
             </div>

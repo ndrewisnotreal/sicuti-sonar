@@ -10,10 +10,9 @@ import LeaveFormDurationInfo from '@/components/leave/LeaveFormDurationInfo.vue'
 import TourHelpButton from '@/components/common/TourHelpButton.vue';
 import { validateLeaveForm, validateDraftForm } from '@/utils/leaveFormValidation';
 import {
-    X,
-    Send,
-    Save
-} from 'lucide-vue-next';
+    PhPaperPlaneRight,
+    PhFloppyDisk
+} from '@phosphor-icons/vue';
 
 const props = defineProps({
     visible: {
@@ -631,7 +630,7 @@ function closeDialog() {
                         :disabled="isSubmitting"
                         @click="saveDraft"
                     >
-                        <Save :size="14" :stroke-width="2" />
+                        <PhFloppyDisk :size="14" weight="bold" aria-hidden="true" />
                         <span>Simpan Draf</span>
                     </Button>
                     <Button
@@ -642,7 +641,7 @@ function closeDialog() {
                         :disabled="isSavingDraft"
                         @click="submitLeave"
                     >
-                        <Send :size="14" :stroke-width="2" />
+                        <PhPaperPlaneRight :size="14" weight="bold" aria-hidden="true" />
                         <span>{{ isEditMode && !isDraftEdit ? 'Ajukan Ulang' : 'Kirim Pengajuan' }}</span>
                     </Button>
                 </div>

@@ -100,7 +100,8 @@ export const leaveService = {
 
         const [bals, historyRes] = await Promise.all([
             query.balances !== undefined ? Promise.resolve(query.balances).catch(() => []) : this.getBalances({ year }).catch(() => []),
-            api.get('/sicuti/leave-balance/history', { year }).catch(() => [])
+            // Galat riwayat diteruskan ke halaman agar tidak tampil sebagai riwayat pendek (audit-028 #11, izin pengguna 2026-11-08).
+            api.get('/sicuti/leave-balance/history', { year })
         ]);
 
         const balList = Array.isArray(bals) ? bals : bals ? [bals] : [];
@@ -124,7 +125,7 @@ export const leaveService = {
                     year,
                     type: 'credit',
                     amount: carryOver,
-                    description: 'Carry over tahun sebelumnya',
+                    description: 'Sisa cuti tahun lalu',
                     expiry: current.carry_over_expiry_date || null,
                     date: periodStart
                 });

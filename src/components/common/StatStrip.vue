@@ -12,7 +12,7 @@ defineProps({
         <div
             v-for="item in items"
             :key="item.label"
-            class="group relative min-w-0 bg-surface-0 dark:bg-surface-900 border border-surface-200/80 dark:border-surface-800 rounded-2xl p-4 sm:p-5 shadow-[0_1px_3px_rgba(0,0,0,0.03),0_6px_16px_rgba(0,0,0,0.02)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.03)] transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(0,0,0,0.06),0_12px_24px_rgba(0,0,0,0.03)] hover:border-surface-300 dark:hover:border-surface-700"
+            class="relative min-w-0 bg-surface-0 dark:bg-surface-900 rounded-border p-4 sm:p-5"
         >
             <div class="flex items-start justify-between gap-2">
                 <span class="text-xs font-medium text-surface-500 dark:text-surface-400 leading-tight line-clamp-2">
@@ -20,10 +20,10 @@ defineProps({
                 </span>
                 <div
                     v-if="item.icon"
-                    class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105"
+                    class="w-8 h-8 rounded-border flex items-center justify-center shrink-0"
                     :class="item.accent ? 'bg-primary/10 text-primary' : 'bg-surface-100 dark:bg-surface-800 text-surface-500 dark:text-surface-400'"
                 >
-                    <component :is="item.icon" :size="16" :stroke-width="1.75" />
+                    <component :is="item.icon" :size="16" weight="bold" aria-hidden="true" />
                 </div>
                 <span
                     v-else-if="item.badge"
@@ -35,14 +35,14 @@ defineProps({
 
             <div class="mt-2.5 flex items-baseline gap-1.5">
                 <span
-                    class="text-2xl sm:text-3xl font-bold tabular-nums tracking-tight transition-colors"
+                    class="text-2xl sm:text-3xl font-bold tabular-nums tracking-tight"
                     :class="item.accent ? 'text-primary' : 'text-surface-900 dark:text-surface-50'"
                 >
                     {{ item.value }}
                 </span>
                 <span
                     v-if="item.unit"
-                    class="text-xs font-semibold transition-colors"
+                    class="text-xs font-semibold"
                     :class="item.accent ? 'text-primary' : 'text-surface-500 dark:text-surface-400'"
                 >
                     {{ item.unit }}
@@ -58,7 +58,7 @@ defineProps({
                 aria-valuemax="100"
             >
                 <div
-                    class="h-full rounded-full bg-primary transition-all duration-500 ease-out"
+                    class="h-full rounded-full bg-primary transition-[width] duration-500 ease-out motion-reduce:transition-none"
                     :style="{ width: `${item.progress}%` }"
                 ></div>
             </div>

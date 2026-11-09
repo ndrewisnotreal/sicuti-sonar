@@ -1,7 +1,6 @@
 <script setup>
-import { ref } from 'vue';
-import { Camera, Trash2 } from 'lucide-vue-next';
-import { useToast } from 'primevue/usetoast';
+import { ref, computed } from 'vue';
+import { PhCamera, PhTrash } from '@phosphor-icons/vue';
 
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const PHOTO_MAX_BYTES = 2 * 1024 * 1024;
@@ -46,8 +45,12 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['photo-selected', 'remove-photo', 'cancel-photo']);
-const toast = useToast();
 const photoInput = ref(null);
+const photoError = ref('');
+
+// Tanpa nilai karangan ("Staff IT", "SIT") bila data kosong (audit-031 #1).
+const known = (v) => (v && v !== '-' ? v : '');
+const deptLine = computed(() => [known(props.deptName), known(props.deptCode) && `Seksi ${props.deptCode}`].filter(Boolean).join(' · '));
 
 function pickPhoto() {
     photoInput.value?.click();
@@ -57,30 +60,22 @@ function onPhotoSelected(event) {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+    // Kesalahan foto ditulis di dekat tombolnya, bukan toast (audit-031 #3).
     if (!PHOTO_TYPES.includes(file.type)) {
-        toast.add({
-            severity: 'warn',
-            summary: 'Format foto tidak didukung',
-            detail: 'Pilih foto JPG, PNG, atau WEBP.',
-            life: 3500
-        });
+        photoError.value = 'Format foto tidak didukung. Pilih foto JPG, PNG, atau WEBP.';
         return;
     }
     if (file.size > PHOTO_MAX_BYTES) {
-        toast.add({
-            severity: 'warn',
-            summary: 'Foto terlalu besar',
-            detail: 'Ukuran foto maksimal 2 MB.',
-            life: 3500
-        });
+        photoError.value = 'Foto terlalu besar. Ukuran maksimal 2 MB.';
         return;
     }
+    photoError.value = '';
     emit('photo-selected', file);
 }
 </script>
 
 <template>
-    <div>
+    <div class="flex items-start gap-4">
         <input
             id="unggah-foto-profil"
             ref="photoInput"
@@ -91,51 +86,45 @@ function onPhotoSelected(event) {
             @change="onPhotoSelected"
         />
 
-        <div class="p-4 rounded-xl bg-surface-50 dark:bg-surface-800/40 border border-surface-200 dark:border-surface-700 flex items-center gap-4">
-            <div class="relative rounded-2xl bg-surface-100 dark:bg-surface-800 p-1 border border-surface-200 dark:border-surface-700 shadow-sm flex items-center justify-center shrink-0 size-16">
-                <img v-if="photoUrl" :src="photoUrl" :alt="`Foto profil ${name}`" class="size-full rounded-xl object-cover" />
-                <div
-                    v-else
-                    class="size-full rounded-xl bg-primary-50 dark:bg-primary-950 text-primary-700 dark:text-primary-300 text-xl font-extrabold flex items-center justify-center select-none"
-                >
-                    {{ userInitials }}
-                </div>
-                <button
+        <div class="size-16 shrink-0 rounded-full overflow-hidden bg-primary-50 dark:bg-primary-950 flex items-center justify-center">
+            <img v-if="photoUrl" :src="photoUrl" :alt="`Foto profil ${name}`" class="size-full object-cover" />
+            <span v-else class="text-xl font-bold text-primary-700 dark:text-primary-300 select-none" aria-hidden="true">{{ userInitials }}</span>
+        </div>
+
+        <div class="min-w-0 flex-1 space-y-0.5">
+            <div class="text-base font-bold text-surface-900 dark:text-surface-0 leading-snug break-words">{{ name }}</div>
+            <div v-if="known(roleName)" class="text-xs text-surface-700 dark:text-surface-300">{{ roleName }}</div>
+            <div v-if="deptLine" class="text-xs text-muted-color">{{ deptLine }}</div>
+            <div class="text-xs text-muted-color">NIK <span class="font-mono text-surface-800 dark:text-surface-200">{{ nip }}</span></div>
+
+            <div class="flex flex-wrap gap-2 pt-2">
+                <Button
                     type="button"
-                    class="absolute -bottom-1 -right-1 size-[22px] rounded-full bg-primary text-primary-contrast shadow flex items-center justify-center hover:bg-primary-emphasis transition-colors cursor-pointer"
+                    severity="secondary"
+                    outlined
+                    size="small"
+                    class="text-xs flex items-center gap-1.5 !min-h-11 sm:!min-h-9"
                     aria-label="Ganti foto profil"
-                    title="Ganti foto profil (JPG, PNG, atau WEBP maks 2 MB)"
                     @click="pickPhoto"
                 >
-                    <Camera :size="11" />
-                </button>
+                    <PhCamera :size="14" weight="bold" aria-hidden="true" />
+                    <span>Ganti foto</span>
+                </Button>
+                <Button
+                    v-if="photoUrl"
+                    type="button"
+                    severity="danger"
+                    text
+                    size="small"
+                    class="text-xs flex items-center gap-1.5 !min-h-11 sm:!min-h-9 !text-(--status-danger-fg)"
+                    @click="isPendingPhoto ? emit('cancel-photo') : emit('remove-photo')"
+                >
+                    <PhTrash :size="14" weight="bold" aria-hidden="true" />
+                    <span>{{ isPendingPhoto ? 'Batalkan foto baru' : 'Hapus foto profil' }}</span>
+                </Button>
             </div>
-
-            <div class="min-w-0 flex-1">
-                <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                    <span class="text-base font-bold text-surface-900 dark:text-surface-0 leading-snug break-words">{{ name }}</span>
-                    <span class="self-start sm:self-auto px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary/10 text-primary border border-primary/20 shrink-0">
-                        {{ roleName || 'Staff IT' }}
-                    </span>
-                </div>
-                <p class="text-xs text-muted-color mt-0.5 truncate">
-                    {{ deptName || 'Smelter Information Technology' }} &bull; Seksi {{ deptCode || 'SIT' }}
-                </p>
-                <div class="flex items-center gap-3 mt-1.5 text-[11px] text-muted-color">
-                    <span>NIP: <strong class="font-mono text-surface-800 dark:text-surface-200">{{ nip }}</strong></span>
-                </div>
-
-                <div v-if="photoUrl" class="mt-1.5">
-                    <button
-                        type="button"
-                        class="text-[11px] font-medium text-rose-600 dark:text-rose-400 hover:underline inline-flex items-center gap-1 cursor-pointer transition-colors"
-                        @click="isPendingPhoto ? emit('cancel-photo') : emit('remove-photo')"
-                    >
-                        <Trash2 :size="12" />
-                        <span>{{ isPendingPhoto ? 'Batalkan foto baru' : 'Hapus foto profil' }}</span>
-                    </button>
-                </div>
-            </div>
+            <p class="text-xs text-muted-color">JPG, PNG, atau WEBP, maksimal 2 MB.</p>
+            <p v-if="photoError" role="alert" class="text-xs text-(--status-danger-fg)">{{ photoError }}</p>
         </div>
     </div>
 </template>

@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { attachmentInfo, documentPending, fetchAttachmentUrl, formatDate, openAttachment } from '@/service/sicutiService';
-import { Paperclip, ExternalLink, FileClock } from 'lucide-vue-next';
+import { PhPaperclip, PhArrowSquareOut, PhFileDashed } from '@phosphor-icons/vue';
 
 const props = defineProps({
     request: { type: Object, default: null },
@@ -47,7 +47,7 @@ async function open() {
 
 <template>
     <div v-if="pending" class="inline-flex items-start gap-2 px-3 py-2 rounded-lg border text-xs bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-100">
-        <FileClock :size="14" class="mt-0.5 shrink-0" />
+        <PhFileDashed :size="14" weight="bold" aria-hidden="true" class="mt-0.5 shrink-0" />
         <span>
             Dokumen pendukung menyusul, paling lambat <strong>{{ formatDate(request.document_due_date) }}</strong>.
             <template v-if="!compact">Pengajuan belum bisa disetujui sebelum dokumen diunggah.</template>
@@ -73,12 +73,12 @@ async function open() {
             "
             @click="open"
         >
-            <Paperclip :size="compact ? 11 : 13" class="text-primary shrink-0" />
+            <PhPaperclip :size="14" weight="bold" aria-hidden="true" class="text-primary shrink-0" />
             <span class="truncate max-w-xs">{{ info.name }}</span>
-            <ExternalLink v-if="!compact" :size="12" class="text-muted-color shrink-0" />
+            <PhArrowSquareOut v-if="!compact" :size="14" weight="bold" aria-hidden="true" class="text-muted-color shrink-0" />
         </button>
         <span v-else class="inline-flex items-center gap-1.5 text-xs text-muted-color">
-            <Paperclip :size="12" class="shrink-0" />
+            <PhPaperclip :size="14" weight="bold" aria-hidden="true" class="shrink-0" />
             <span class="truncate max-w-xs">{{ info.name }}</span>
         </span>
     </div>

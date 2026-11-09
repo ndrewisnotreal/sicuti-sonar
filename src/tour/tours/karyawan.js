@@ -12,7 +12,7 @@ export const TOUR_STEPS = {
         {
             element: 'menu:/leave/balance',
             title: 'Saldo Cuti',
-            text: 'Lihat sisa saldo, kuota tahunan, carry over, dan riwayat perubahannya.'
+            text: 'Lihat sisa saldo, kuota tahunan, sisa tahun lalu, dan riwayat perubahannya.'
         },
         {
             element: 'menu-mobile',
@@ -60,7 +60,7 @@ export const TOUR_STEPS = {
         {
             element: 'leave-status-tabs',
             title: 'Saring per status',
-            text: 'Tampilkan pengajuan berdasarkan status. Angka di tiap tab adalah jumlah pengajuannya.'
+            text: 'Tampilkan pengajuan berdasarkan status. Angka di tiap pilihan adalah jumlah pengajuannya.'
         },
         {
             element: 'leave-search',
@@ -80,7 +80,7 @@ export const TOUR_STEPS = {
         {
             element: 'leave-list-mobile',
             title: 'Daftar pengajuan',
-            text: 'Setiap kartu menampilkan status dan tombol aksinya. <b>Dikembalikan</b> berarti perlu diperbaiki lalu diajukan ulang; pengajuan Draf atau yang belum diproses masih bisa dibatalkan.'
+            text: 'Setiap pengajuan menampilkan status dan tombol aksinya. <b>Dikembalikan</b> berarti perlu diperbaiki lalu diajukan ulang; pengajuan Draf atau yang belum diproses masih bisa dibatalkan.'
         }
     ],
     'karyawan.formulir': [
@@ -141,11 +141,11 @@ export const TOUR_STEPS = {
         {
             element: 'balance-stats',
             title: 'Ringkasan saldo',
-            text: 'Kuota tahunan, carry over dari periode sebelumnya, cuti yang sudah terpakai, dan sisa saldo Anda.'
+            text: 'Kuota tahunan, sisa cuti tahun lalu, cuti yang sudah terpakai, dan sisa saldo Anda.'
         },
         {
             element: 'balance-mutasi',
-            title: 'Riwayat mutasi',
+            title: 'Riwayat perubahan saldo',
             text: 'Setiap perubahan saldo: potongan dari cuti yang disetujui dan penyesuaian oleh admin beserta alasannya.'
         }
     ]

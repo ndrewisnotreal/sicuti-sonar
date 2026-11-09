@@ -3,7 +3,7 @@ import { ref, watch } from 'vue';
 import { adminService } from '@/service/adminService';
 import { sicutiState, syncFromBackend, formatDate, CURRENT_YEAR } from '@/service/sicutiService';
 import { useToast } from 'primevue/usetoast';
-import { FileSpreadsheet, Download, AlertCircle, CheckCircle2 } from 'lucide-vue-next';
+import { PhDownloadSimple, PhWarningCircle, PhCheckCircle, PhUploadSimple } from '@phosphor-icons/vue';
 
 const props = defineProps({
     visible: {
@@ -164,15 +164,13 @@ async function processHolidayImport() {
         @update:visible="emit('update:visible', $event)"
     >
         <div class="space-y-4 pt-2 text-xs">
-            <div class="p-3.5 rounded-xl bg-primary/5 border border-primary/20 flex items-start justify-between gap-3">
+            <!-- Satu bingkai saja (dialog); info format berupa teks, bukan kotak bertinta (audit-014 #6). -->
+            <div class="flex items-start justify-between gap-3">
                 <div class="space-y-1">
-                    <span class="font-semibold text-surface-900 dark:text-surface-100 flex items-center gap-1.5">
-                        <FileSpreadsheet :size="15" class="text-primary" />
-                        <span>Format File CSV Hari Libur</span>
-                    </span>
-                    <p class="text-[11px] text-muted-color leading-relaxed">
-                        Kolom: <code class="font-mono text-primary bg-primary/10 px-1 py-0.5 rounded">holiday_date,nm_holiday,type</code><br />
-                        (nilai tipe: <code class="font-mono">national</code> atau <code class="font-mono">collective</code>)
+                    <p class="font-semibold text-surface-900 dark:text-surface-100">Format file CSV hari libur</p>
+                    <p class="text-xs text-muted-color leading-relaxed">
+                        Kolom: <code class="font-mono text-surface-900 dark:text-surface-100 bg-surface-100 dark:bg-surface-800 px-1 py-0.5 rounded">holiday_date,nm_holiday,type</code><br />
+                        Nilai tipe: <code class="font-mono">national</code> atau <code class="font-mono">collective</code>
                     </p>
                 </div>
                 <Button
@@ -182,37 +180,43 @@ async function processHolidayImport() {
                     class="text-xs font-semibold shrink-0 flex items-center gap-1.5"
                     @click="downloadHolidayTemplate"
                 >
-                    <Download :size="13" />
+                    <PhDownloadSimple :size="14" weight="bold" aria-hidden="true" />
                     <span>Templat CSV</span>
                 </Button>
             </div>
 
-            <div v-if="importError" class="p-3 rounded-lg bg-rose-50 text-rose-800 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-200 dark:border-rose-900 flex items-center gap-2">
-                <AlertCircle :size="15" class="shrink-0" />
+            <div v-if="importError" role="alert" class="p-3 rounded-border bg-(--status-danger-bg) text-(--status-danger-fg) flex items-center gap-2">
+                <PhWarningCircle :size="14" weight="bold" class="shrink-0" aria-hidden="true" />
                 <span>{{ importError }}</span>
             </div>
 
             <div>
-                <label class="block font-semibold text-surface-700 dark:text-surface-300 mb-1">
-                    Pilih File CSV (.csv) <span class="text-rose-500">*</span>
-                </label>
-                <input
-                    type="file"
-                    accept=".csv"
-                    @change="handleHolidayFileUpload"
-                    class="block w-full text-xs text-surface-700 dark:text-surface-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-emphasis cursor-pointer border border-surface-200 dark:border-surface-700 rounded-lg p-1 bg-surface-50 dark:bg-surface-800/50"
-                />
+                <p class="block font-semibold text-surface-700 dark:text-surface-300 mb-1">
+                    File CSV (.csv) <span class="text-(--status-danger-fg)" aria-hidden="true">*</span>
+                </p>
+                <!-- Input native disembunyikan secara visual; label berbahasa Indonesia menjadi tombolnya dan tetap terhubung (audit-014 #1, #7). -->
+                <div class="flex flex-wrap items-center gap-3">
+                    <input id="holiday-csv" type="file" accept=".csv" class="peer sr-only" @change="handleHolidayFileUpload" />
+                    <label
+                        for="holiday-csv"
+                        class="inline-flex min-h-11 items-center gap-1.5 rounded-border border border-surface-300 dark:border-surface-600 px-3 font-semibold text-surface-800 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-800 cursor-pointer peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary"
+                    >
+                        <PhUploadSimple :size="14" weight="bold" aria-hidden="true" />
+                        Pilih file CSV
+                    </label>
+                    <span class="text-muted-color truncate">{{ importFile ? importFile.name : 'Belum ada file dipilih' }}</span>
+                </div>
             </div>
 
             <div v-if="parsedHolidays.length > 0" class="space-y-2">
                 <div class="flex items-center justify-between text-xs">
-                    <span class="font-semibold text-surface-900 dark:text-surface-100 flex items-center gap-1 text-emerald-600">
-                        <CheckCircle2 :size="14" />
+                    <span class="font-semibold text-surface-900 dark:text-surface-100 flex items-center gap-1">
+                        <PhCheckCircle :size="14" weight="bold" class="text-(--status-success-fg)" aria-hidden="true" />
                         <span>Preview Data Terbaca ({{ parsedHolidays.length }} Hari Libur)</span>
                     </span>
                 </div>
 
-                <div class="border border-surface-200 dark:border-surface-700 rounded-lg overflow-x-auto max-h-48 text-[11px]">
+                <div class="border border-surface-200 dark:border-surface-700 rounded-border overflow-x-auto max-h-48 text-xs">
                     <table class="w-full border-collapse">
                         <thead class="bg-surface-100 dark:bg-surface-800 text-surface-700 dark:text-surface-300">
                             <tr>
@@ -229,7 +233,6 @@ async function processHolidayImport() {
                                     <Tag
                                         :value="h.type === 'collective' ? 'Cuti Bersama' : 'Libur Nasional'"
                                         :severity="h.type === 'collective' ? 'warn' : 'danger'"
-                                        class="text-[11px]"
                                     />
                                 </td>
                             </tr>

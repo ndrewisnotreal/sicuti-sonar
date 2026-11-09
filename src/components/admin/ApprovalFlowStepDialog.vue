@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { adminService } from '@/service/adminService';
 import { useToast } from 'primevue/usetoast';
 import { approverChoices, defaultApprovers, flowFormProblem } from '@/utils/approvalFlowOptions';
@@ -40,6 +40,10 @@ const toast = useToast();
 
 const flowForm = ref({ id_flow: '', assigned_role: '', users: [] });
 const savingFlow = ref(false);
+// Pesan flowFormProblem ditampilkan di bawah field yang bersangkutan (audit-015 #5).
+const errors = ref({ role: '', users: '' });
+watch(() => flowForm.value.assigned_role, () => (errors.value.role = ''));
+watch(() => flowForm.value.users, () => (errors.value.users = ''));
 
 const isEditing = computed(() => Boolean(flowForm.value.id_flow));
 
@@ -61,6 +65,7 @@ watch(
     () => props.visible,
     (isOpen) => {
         if (!isOpen) return;
+        errors.value = { role: '', users: '' };
         if (props.flowData) {
             flowForm.value = {
                 id_flow: props.flowData.id_flow || '',
@@ -85,7 +90,11 @@ function onFlowRoleChange(kdRole) {
 async function saveFlow() {
     const problem = flowFormProblem(flowForm.value);
     if (problem) {
-        toast.add({ severity: 'warn', summary: 'Validasi', detail: problem, life: 3000 });
+        const onRole = !flowForm.value.assigned_role;
+        errors.value = { role: onRole ? problem + '.' : '', users: onRole ? '' : problem + '.' };
+        await nextTick();
+        // Select/MultiSelect PrimeVue: fokus ke elemen combobox di dalam wrapper.
+        document.querySelector(onRole ? '[aria-labelledby="flow-role-label"]' : '#flow-approvers')?.focus();
         return;
     }
     savingFlow.value = true;
@@ -117,10 +126,13 @@ async function saveFlow() {
         @update:visible="emit('update:visible', $event)"
     >
         <div class="space-y-2 pt-2 text-xs">
-            <label for="flow-role" class="block font-medium mb-1">Peran *</label>
+            <label id="flow-role-label" class="block font-medium mb-1">Peran *</label>
             <Select
                 v-model="flowForm.assigned_role"
                 inputId="flow-role"
+                ariaLabelledby="flow-role-label"
+                :invalid="!!errors.role"
+                :aria-describedby="errors.role ? 'flow-role-error' : undefined"
                 :options="roleOptions"
                 optionLabel="label"
                 optionValue="value"
@@ -129,7 +141,8 @@ async function saveFlow() {
                 class="w-full text-xs"
                 @change="onFlowRoleChange($event.value)"
             />
-            <p class="text-[11px] text-muted-color">
+            <p v-if="errors.role" id="flow-role-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ errors.role }}</p>
+            <p class="text-xs text-muted-color">
                 Peran menjadi nama tingkat.{{ isEditing ? '' : ' Tingkat baru ditaruh paling akhir; geser untuk mengubah urutan.' }}
             </p>
 
@@ -148,8 +161,11 @@ async function saveFlow() {
                 emptyMessage="Belum ada akun yang punya izin approve"
                 emptyFilterMessage="Tidak ada akun yang cocok"
                 class="w-full text-xs"
+                :invalid="!!errors.users"
+                :aria-describedby="errors.users ? 'flow-approvers-error' : undefined"
             />
-            <p class="text-[11px] text-muted-color">
+            <p v-if="errors.users" id="flow-approvers-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ errors.users }}</p>
+            <p class="text-xs text-muted-color">
                 Akun dari departemen templat yang perannya punya izin Approve/Reject atau Validasi; cukup salah satu yang menyetujui. Satu akun hanya di satu tingkat per templat.
             </p>
         </div>
