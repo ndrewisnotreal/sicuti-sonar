@@ -7,9 +7,11 @@ let lastConfirm = null;
 vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: toastAdd }) }));
 vi.mock('primevue/useconfirm', () => ({ useConfirm: () => ({ require: (opts) => (lastConfirm = opts) }) }));
 vi.mock('@/service/approvalService', () => ({ approvalService: { processApproval: vi.fn() } }));
+vi.mock('@/service/sicutiService', async (orig) => ({ ...(await orig()), syncFromBackend: vi.fn() }));
 
 import ApprovalActionDialog from '@/components/approval/ApprovalActionDialog.vue';
 import { approvalService } from '@/service/approvalService';
+import { syncFromBackend } from '@/service/sicutiService';
 
 const DialogStub = defineComponent({
     name: 'Dialog',
@@ -56,6 +58,7 @@ describe('ApprovalActionDialog', () => {
     beforeEach(() => {
         toastAdd.mockClear();
         approvalService.processApproval.mockReset();
+        syncFromBackend.mockClear();
         lastConfirm = null;
     });
 
@@ -93,6 +96,8 @@ describe('ApprovalActionDialog', () => {
         expect(toastAdd).toHaveBeenCalledWith({ severity: 'success', summary: 'Aksi Berhasil', detail: 'Pengajuan cuti #REQ-SIT-0001/2026 berhasil disetujui.', life: 4000 });
         expect(w.emitted('update:visible')).toEqual([[false]]);
         expect(reload).toHaveBeenCalledTimes(1);
+        // State global (badge, notifikasi) ikut diperbarui setelah keputusan (qa-browser Q1).
+        expect(syncFromBackend).toHaveBeenCalledWith({ fresh: true });
     });
 
     it('Tolak dengan catatan → catatan dikirim tanpa spasi tepi', async () => {
@@ -139,6 +144,7 @@ describe('ApprovalActionDialog', () => {
         expect(toastAdd).toHaveBeenCalledWith({ severity: 'error', summary: 'Gagal', detail: 'Server sibuk', life: 5000 });
         expect(w.emitted('update:visible')).toBeUndefined();
         expect(reload).not.toHaveBeenCalled();
+        expect(syncFromBackend).not.toHaveBeenCalled();
     });
 
     it('catatan dikosongkan setiap kali dialog dibuka lagi', async () => {

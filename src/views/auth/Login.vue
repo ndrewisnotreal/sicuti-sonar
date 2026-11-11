@@ -6,7 +6,7 @@ import api, { LOGOUT_NOTICE_KEY } from '@/service/api';
 import { login } from '@/service/sicutiService';
 import { useLayout } from '@/layout/composables/layout';
 import { useToast } from 'primevue/usetoast';
-import { PhUser, PhSignIn, PhKey, PhSun, PhMoon, PhCheck, PhCircle } from '@phosphor-icons/vue';
+import { PhUser, PhSignIn, PhKey, PhLock, PhSun, PhMoon, PhCheck, PhCircle, PhSpinner } from '@phosphor-icons/vue';
 import { passwordChecks, passwordProblem } from '@/utils/passwordRules';
 
 const router = useRouter();
@@ -44,15 +44,15 @@ function focusFirstError(order) {
 async function handleLogin() {
     errorMessage.value = '';
     const cleanId = identifier.value.trim();
-    const cleanPass = password.value.trim();
+    const pass = password.value;
 
     fieldErrors.value = {};
     if (!cleanId) fieldErrors.value['login-id'] = 'Isi NIK atau email Anda.';
-    if (!cleanPass) fieldErrors.value['login-password'] = 'Isi kata sandi Anda.';
+    if (!pass.trim()) fieldErrors.value['login-password'] = 'Isi kata sandi Anda.';
     if (focusFirstError(['login-id', 'login-password'])) return;
 
     submitting.value = true;
-    const res = await login(cleanId, cleanPass);
+    const res = await login(cleanId, pass);
     submitting.value = false;
     if (res.success) {
         sessionStorage.setItem('sct_just_logged_in', 'true');
@@ -65,7 +65,7 @@ async function handleLogin() {
         });
         await router.push('/');
     } else if (res.code === 'PASSWORD_EXPIRED' && res.data?.Token_login_API) {
-        expired.value = { id_user: res.data.id_user, token: res.data.Token_login_API, passwordLama: cleanPass };
+        expired.value = { id_user: res.data.id_user, token: res.data.Token_login_API, passwordLama: pass };
         newPassword.value = '';
         confirmPassword.value = '';
     } else {
@@ -122,8 +122,7 @@ function cancelExpired(message = '') {
 
 <template>
     <div class="min-h-screen flex flex-col items-center justify-center p-4 relative bg-surface-50 dark:bg-surface-950 overflow-hidden">
-        <!-- Foto pabrik = identitas INALUM; cukup digelapkan, tanpa blur berlapis (audit-032 #5). -->
-        <div class="absolute inset-0 bg-cover bg-center" :style="{ backgroundImage: `url('${publicPath('assets/Pabrik-INALUM.jpg')}')` }"></div>
+        <div class="absolute inset-0 bg-cover bg-center" :style="{ backgroundImage: `url('${publicPath('assets/inalum-login-illustration.webp')}')` }"></div>
         <div :class="['absolute inset-0', isDarkTheme ? 'bg-black/60' : 'bg-slate-900/40']"></div>
 
         <div class="absolute top-4 right-4 z-20">
@@ -212,6 +211,7 @@ function cancelExpired(message = '') {
                             v-model="identifier"
                             type="text"
                             autocomplete="username"
+                            placeholder="Masukkan NIK atau email"
                             class="w-full !min-h-11"
                             :invalid="Boolean(fieldErrors['login-id'])"
                             v-bind="invalidAttrs('login-id')"
@@ -222,24 +222,30 @@ function cancelExpired(message = '') {
 
                 <div>
                     <label for="login-password" class="block font-semibold text-surface-700 dark:text-surface-300 mb-1 text-sm">Kata sandi</label>
-                    <Password
-                        v-model="password"
-                        inputId="login-password"
-                        :feedback="false"
-                        toggleMask
-                        fluid
-                        autocomplete="current-password"
-                        :invalid="Boolean(fieldErrors['login-password'])"
-                        :pt="{ pcInputText: { root: { class: '!min-h-11', ...invalidAttrs('login-password') } } }"
-                    />
+                    <IconField iconPosition="left" class="w-full">
+                        <InputIcon>
+                            <PhLock :size="16" weight="bold" aria-hidden="true" class="text-muted-color" />
+                        </InputIcon>
+                        <Password
+                            v-model="password"
+                            inputId="login-password"
+                            :feedback="false"
+                            toggleMask
+                            fluid
+                            autocomplete="current-password"
+                            placeholder="Masukkan kata sandi"
+                            :invalid="Boolean(fieldErrors['login-password'])"
+                            :pt="{ pcInputText: { root: { class: '!min-h-11', ...invalidAttrs('login-password') } } }"
+                        />
+                    </IconField>
                     <p v-if="fieldErrors['login-password']" id="login-password-error" class="text-xs text-(--status-danger-fg) mt-1">{{ fieldErrors['login-password'] }}</p>
-                    <!-- Tautan setinggi target sentuh, di bawah field agar urutan Tab: NIK → kata sandi → lupa → Masuk (audit-032 #1). -->
                     <router-link to="/auth/forgot-password" class="inline-flex items-center min-h-11 sm:min-h-9 text-sm text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary rounded-border">Lupa kata sandi?</router-link>
                 </div>
 
                 <Button type="submit" class="w-full justify-center text-sm font-semibold gap-2 !min-h-11" :loading="submitting">
-                    <PhSignIn :size="16" weight="bold" aria-hidden="true" />
-                    <span>Masuk</span>
+                    <PhSpinner v-if="submitting" :size="16" weight="bold" class="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                    <PhSignIn v-else :size="16" weight="bold" aria-hidden="true" />
+                    <span>{{ submitting ? 'Memproses…' : 'Masuk' }}</span>
                 </Button>
             </form>
         </div>

@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue';
 import { approvalService } from '@/service/approvalService';
-import { formatDate, attachmentInfo, documentPending } from '@/service/sicutiService';
+import { formatDate, attachmentInfo, documentPending, syncFromBackend } from '@/service/sicutiService';
 import LeaveAttachment from '@/components/leave/LeaveAttachment.vue';
 import TourHelpButton from '@/components/common/TourHelpButton.vue';
 import { useToast } from 'primevue/usetoast';
@@ -78,6 +78,7 @@ async function processAction(actionType, idReq) {
             action: actionType,
             notes: approvalNotes.value.trim()
         });
+        void syncFromBackend({ fresh: true });
 
         const actionText = actionType === 'approve' ? 'disetujui' : (actionType === 'reject' ? 'ditolak' : 'dikembalikan');
         toast.add({

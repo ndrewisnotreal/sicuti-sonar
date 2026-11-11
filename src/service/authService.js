@@ -38,9 +38,10 @@ function rememberMenu(data) {
 
 export const authService = {
     async login(username, password) {
+        // Password tidak di-trim: backend menyimpan hash password apa adanya, termasuk spasi.
         const payload = {
             username: username.trim(),
-            password: password.trim()
+            password
         };
         const res = await api.post('/auth/authorize', payload);
         const data = res?.data || res;

@@ -137,7 +137,7 @@ async function processHolidayImport() {
             failed.push(`${h.date}: ${err.message}`);
         }
     }
-    await syncFromBackend();
+    await syncFromBackend({ fresh: true });
 
     if (failed.length) {
         toast.add({ severity: 'warn', summary: `${failed.length} baris gagal diimport`, detail: failed.slice(0, 3).join('; '), life: 5000 });

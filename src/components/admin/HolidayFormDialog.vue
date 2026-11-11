@@ -106,7 +106,7 @@ async function saveHoliday() {
             nm_holiday: h.name.trim(),
             type: h.type
         });
-        await syncFromBackend();
+        await syncFromBackend({ fresh: true });
         toast.add({
             severity: 'success',
             summary: props.isEditing ? 'Diperbarui' : 'Ditambahkan',

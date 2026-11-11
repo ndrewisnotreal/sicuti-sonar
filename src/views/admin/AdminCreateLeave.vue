@@ -161,7 +161,7 @@ async function submit() {
             substitute_id: f.substituteId || undefined,
             reason: f.reason.trim()
         });
-        await syncFromBackend();
+        await syncFromBackend({ fresh: true });
         const employee = employees.value.find((u) => u.id === f.userId);
         toast.add({
             severity: 'success',

@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '@/service/api';
-import { currentUser, sicutiState, appMode, formatTimeAgo, isAdmin, isApprover, refreshPendingApprovalCount } from '@/service/sicutiService';
+import { currentUser, sicutiState, formatTimeAgo, isAdmin, isApprover, refreshPendingApprovalCount } from '@/service/sicutiService';
 import LeaveDetailDialog from '@/components/leave/LeaveDetailDialog.vue';
 import AppNotificationItem from '@/layout/AppNotificationItem.vue';
 import {
@@ -128,7 +128,6 @@ function handleNotifClick(notif) {
     closeNotif();
 
     if (notif.group === 'pending') {
-        appMode.value = 'approval';
         router.push('/approval/pending');
         return;
     }
@@ -136,9 +135,9 @@ function handleNotifClick(notif) {
         router.push('/admin/monitoring');
         return;
     }
-    const req = notif.requestId && sicutiState.leaveRequests.find((r) => r.id === notif.requestId);
-    if (req) {
-        selectedRequest.value = req;
+    if (notif.requestId) {
+        // Approver tidak punya pengajuan orang lain di state; dialog mengambil detail lengkap sendiri lewat id.
+        selectedRequest.value = sicutiState.leaveRequests.find((r) => r.id === notif.requestId) || { id: notif.requestId };
         isDetailDialogVisible.value = true;
         return;
     }

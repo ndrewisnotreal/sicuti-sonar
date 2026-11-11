@@ -20,6 +20,8 @@ export async function openAttachment(idRequest) {
         const url = await fetchAttachmentUrl(idRequest);
         if (win) win.location.href = url;
         else window.location.href = url;
+        // Tab baru butuh waktu untuk memuat blob sebelum URL-nya dilepas.
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
         win?.close();
         throw err;

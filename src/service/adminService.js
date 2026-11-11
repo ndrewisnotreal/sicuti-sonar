@@ -41,9 +41,16 @@ export const adminService = {
         return res?.data || res || [];
     },
 
+    // Backend membatasi 1000 baris per halaman; halaman berikutnya diambil sampai `total` tercapai.
     async getLeaveRequests(params = {}) {
-        const res = await api.get('/sicuti/leave-request', { limit: 1000, ...params });
-        return res?.data?.data || res?.data || [];
+        const rows = [];
+        for (let page = 1; ; page += 1) {
+            const res = await api.get('/sicuti/leave-request', { limit: 1000, ...params, page });
+            const batch = res?.data?.data || res?.data || [];
+            if (!Array.isArray(batch)) return rows;
+            rows.push(...batch);
+            if (!batch.length || !(rows.length < Number(res?.data?.total))) return rows;
+        }
     },
 
     async getBalances(year) {

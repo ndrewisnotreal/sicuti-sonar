@@ -3,8 +3,6 @@ import { getEncryptedItem, setEncryptedItem } from '@/utils/encryption';
 import { countWorkingDays } from '@/utils/workingDays';
 import api, { clearAuth } from './api.js';
 import authService, { userMenus, userAbilities, can } from './authService.js';
-import leaveService from './leaveService.js';
-import approvalService from './approvalService.js';
 import adminService from './adminService.js';
 import {
     BUILT_IN_ROLES,
@@ -161,37 +159,8 @@ export function defaultAnnualQuota() {
 }
 
 
-function hasApplicantAccess(user = currentUser.value) {
-    return isApplicant(user) && can('pengajuan_cuti.submit', 'dokumen_saldo.view_history', 'dokumen_saldo.view_balance');
-}
-
-const MODE_KEY = 'sicuti_mode';
-function loadInitialMode() {
-    try {
-        return localStorage.getItem(MODE_KEY) === 'approval' ? 'approval' : 'user';
-    } catch {
-        return 'user';
-    }
-}
-const storedMode = ref(loadInitialMode());
-
-export const appMode = computed({
-    get() {
-        const user = currentUser.value;
-        if (isApprovalOnly(user)) return 'approval';
-        if (!isApprover(user) || !hasApplicantAccess(user)) return isApprover(user) ? 'approval' : 'user';
-        return storedMode.value;
-    },
-    set(mode) {
-        storedMode.value = mode === 'approval' ? 'approval' : 'user';
-        try {
-            localStorage.setItem(MODE_KEY, storedMode.value);
-        } catch {}
-    }
-});
-
-export function saveToLocalStorage() {
-}
+// Approver selalu bekerja di mode Approval; tidak ada pilihan mode yang disimpan.
+export const appMode = computed(() => (isApprovalOnly(currentUser.value) ? 'approval' : 'user'));
 
 function mapLeaveTypes(rawTypes) {
     return rawTypes.map((t, idx) => ({
@@ -215,23 +184,39 @@ export function setActiveLeaveTypes(rawList) {
 }
 
 let syncPromise = null;
-export function syncFromBackend() {
+let rerunPromise = null;
+// Naik setiap logout; hasil sinkron dari sesi sebelumnya dibuang.
+let sessionGeneration = 0;
+
+/**
+ * Pemanggilan bersamaan berbagi satu sinkron. Setelah menulis data, panggil dengan `{ fresh: true }`:
+ * sinkron yang sedang berjalan mungkin sudah mengambil data sebelum penulisan itu, jadi ditunggu satu putaran lagi.
+ */
+export function syncFromBackend({ fresh = false } = {}) {
     if (!currentUser.value) return Promise.resolve();
-    if (!syncPromise) {
-        syncPromise = runSync().finally(() => {
-            syncPromise = null;
+    if (syncPromise && fresh) {
+        rerunPromise ??= syncPromise.then(() => {
+            rerunPromise = null;
+            return syncFromBackend();
         });
+        return rerunPromise;
+    }
+    if (!syncPromise) {
+        const run = runSync(sessionGeneration).finally(() => {
+            if (syncPromise === run) syncPromise = null;
+        });
+        syncPromise = run;
     }
     return syncPromise;
 }
 
-async function runSync() {
+async function runSync(generation) {
     if (sicutiState.syncStatus !== 'ready') sicutiState.syncStatus = 'loading';
     let failed = false;
     try {
         const year = new Date().getFullYear();
         const [reqs, balances, holidays, leaveTypes, policy, flows, depts, usersRes, menuRes] = await Promise.allSettled([
-            api.get('/sicuti/leave-request', { limit: 1000 }),
+            adminService.getLeaveRequests(),
             can('master_data.view_master_data', 'dashboard_laporan.view_reports')
                 ? api.get('/sicuti/leave-balance', { year })
                 : api.get('/sicuti/leave-balance/me', { year }),
@@ -246,13 +231,14 @@ async function runSync() {
             authService.getMenu()
         ]);
 
+        if (generation !== sessionGeneration) return;
         void refreshPendingApprovalCount();
 
         // Pengajuan, hari libur, dan pengguna adalah sumber angka Dashboard Admin; gagal di sini berarti 0 bukan fakta.
         failed = [reqs, holidays, usersRes].some((r) => r.status === 'rejected');
 
-        if (reqs.status === 'fulfilled' && reqs.value) {
-            const rawReqs = reqs.value.data?.data || reqs.value.data || reqs.value;
+        if (reqs.status === 'fulfilled') {
+            const rawReqs = reqs.value;
             if (Array.isArray(rawReqs)) {
                 sicutiState.leaveRequests = rawReqs.map((r) => ({
                     id: r.id_request || r.id,
@@ -330,11 +316,14 @@ async function runSync() {
 
         if (policy.status === 'fulfilled' && policy.value?.data) {
             const p = policy.value.data;
+            const quota = p.annual_quota == null ? NaN : Number(p.annual_quota);
+            const annualQuota = Number.isFinite(quota) ? quota : sicutiState.leavePolicy.annualQuota;
+            const maxCarryOver = Number(p.max_carry_over ?? 0);
             sicutiState.leavePolicy = {
-                annualQuota: Number(p.annual_quota),
-                maxCarryOver: Number(p.max_carry_over ?? 0),
+                annualQuota,
+                maxCarryOver,
                 carryOverExpiryMonths: Number(p.carry_over_expiry_months ?? 0),
-                description: `Kuota tahunan ${p.annual_quota} hari, carry over maks ${p.max_carry_over ?? 0} hari`
+                description: `Kuota tahunan ${annualQuota} hari, carry over maks ${maxCarryOver} hari`
             };
         }
 
@@ -437,16 +426,21 @@ export function persistCurrentUser() {
 
 export function logout() {
     authService.logout();
+    sessionGeneration += 1;
+    syncPromise = null;
+    rerunPromise = null;
+    // Data per pengguna dikosongkan agar pengguna berikutnya tidak melihatnya sebelum sinkron pertama selesai.
+    sicutiState.leaveRequests = [];
+    sicutiState.users = [];
+    sicutiState.leaveBalances = [];
+    sicutiState.approvalFlows = [];
+    sicutiState.pendingApprovalCount = 0;
+    pendingCountAt = 0;
     currentUser.value = null;
     activeRole.value = null;
     sicutiState.syncStatus = 'idle';
     clearAuth();
 }
-
-export function switchRole(role) {
-    activeRole.value = role;
-}
-
 
 export function getDivisionUsers(division = getAdminDivision()) {
     return division
@@ -457,12 +451,6 @@ export function getDivisionUsers(division = getAdminDivision()) {
 export function getDivisionRequests(division = getAdminDivision()) {
     const userIds = new Set(getDivisionUsers(division).map((u) => u.id));
     return sicutiState.leaveRequests.filter((r) => userIds.has(r.userId));
-}
-
-export function getDivisionBalances(division = getAdminDivision()) {
-    const users = getDivisionUsers(division).filter((u) => u.isActive !== false);
-    const userIds = new Set(users.map((u) => u.id));
-    return sicutiState.leaveBalances.filter((b) => userIds.has(b.userId));
 }
 
 export function getUserBalance(userId) {
@@ -477,12 +465,13 @@ export function getUserBalance(userId) {
             remaining: Math.max(0, remaining)
         };
     }
+    const annualQuota = defaultAnnualQuota();
     return {
-        annualQuota: 12,
+        annualQuota,
         usedDays: 0,
         carryOverDays: 0,
         carryOverExpiryDate: null,
-        remaining: 12
+        remaining: annualQuota
     };
 }
 
@@ -502,27 +491,6 @@ export function holidayDateSet() {
 
 export function calculateWorkingDays(startDate, endDate) {
     return countWorkingDays(startDate, endDate, holidayDateSet());
-}
-
-export async function createLeaveRequest(payload) {
-    const res = await leaveService.createLeave(payload);
-    await syncFromBackend();
-    return res;
-}
-
-export async function updateLeaveRequest(id, payload) {
-    if (payload.status === 'submitted') {
-        const res = await leaveService.createLeave(payload);
-        await syncFromBackend();
-        return res;
-    }
-    return null;
-}
-
-export async function deleteLeaveRequest(id) {
-    const res = await leaveService.cancelLeave(id);
-    await syncFromBackend();
-    return res;
 }
 
 export function getUserApprovalLevel(userId) {
@@ -545,67 +513,11 @@ export function canUserApprove(req, user) {
     });
 }
 
-export async function approveLeaveRequest(id, notes, signature) {
-    const res = await approvalService.processApproval({
-        idRequest: id,
-        action: 'approve',
-        notes,
-        signature
-    });
-    await syncFromBackend();
-    return res;
-}
-
-export async function rejectLeaveRequest(id, notes) {
-    const res = await approvalService.processApproval({
-        idRequest: id,
-        action: 'reject',
-        notes
-    });
-    await syncFromBackend();
-    return res;
-}
-
-export async function returnLeaveRequest(id, notes) {
-    const res = await approvalService.processApproval({
-        idRequest: id,
-        action: 'return',
-        notes
-    });
-    await syncFromBackend();
-    return res;
-}
-
 export function getUser(id) {
     return sicutiState.users.find((u) => u.id === id || u.username === id);
 }
 
 export function getLeaveType(id) {
     return sicutiState.leaveTypes.find((t) => t.id === id || t.code === id);
-}
-
-
-
-export async function updateUserAccount(userId, payload) {
-    const res = await adminService.updateUser({
-        uid_user_system: userId,
-        nama: payload.name,
-        email: payload.email,
-        password: payload.password,
-        status_user: payload.isActive ? 'A' : 'N'
-    });
-    await syncFromBackend();
-    return res;
-}
-
-export async function toggleUserStatus(userId) {
-    const user = getUser(userId);
-    if (!user) return null;
-    const res = await adminService.updateUser({
-        uid_user_system: userId,
-        status_user: user.isActive ? 'N' : 'A'
-    });
-    await syncFromBackend();
-    return res;
 }
 

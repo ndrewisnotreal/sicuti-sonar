@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { leaveService } from '@/service/leaveService';
-import { currentUser, isSubstituteRequired, lastReturnNote } from '@/service/sicutiService';
+import { currentUser, isSubstituteRequired, lastReturnNote, syncFromBackend } from '@/service/sicutiService';
 import { useToast } from 'primevue/usetoast';
 import { countWorkingDays, latestEndDate } from '@/utils/workingDays';
 import LeaveAttachmentUpload from '@/components/leave/LeaveAttachmentUpload.vue';
@@ -373,6 +373,7 @@ async function saveDraft() {
             detail: 'Draf belum dikirim ke atasan. Buka tab Draf di Pengajuan Cuti untuk melanjutkan.',
             life: 4000
         });
+        void syncFromBackend({ fresh: true });
         emit('saved', res);
         closeDialog();
     } catch (err) {
@@ -423,6 +424,7 @@ async function submitLeave() {
             });
         }
 
+        void syncFromBackend({ fresh: true });
         emit('saved', res);
         closeDialog();
     } catch (err) {
