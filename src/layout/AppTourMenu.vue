@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue';
-import { CircleHelp } from 'lucide-vue-next';
+import { PhQuestion } from '@phosphor-icons/vue';
 import { useTour } from '@/tour/useTour';
 import AppTourMenuItems from './AppTourMenuItems.vue';
 
@@ -40,7 +40,7 @@ onBeforeUnmount(() => {
             title="Panduan & Tur"
             @click="open = !open"
         >
-            <CircleHelp :size="16" :stroke-width="1.75" />
+            <PhQuestion :size="16" weight="bold" aria-hidden="true" />
             <span
                 v-if="hasUnseen"
                 class="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary ring-2 ring-surface-0 dark:ring-surface-900"

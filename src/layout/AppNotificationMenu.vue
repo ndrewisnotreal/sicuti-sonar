@@ -6,11 +6,11 @@ import { currentUser, sicutiState, appMode, formatTimeAgo, isAdmin, isApprover, 
 import LeaveDetailDialog from '@/components/leave/LeaveDetailDialog.vue';
 import AppNotificationItem from '@/layout/AppNotificationItem.vue';
 import {
-    Bell,
-    CheckCheck,
-    Inbox,
-    ChevronRight
-} from 'lucide-vue-next';
+    PhBell,
+    PhChecks,
+    PhTray,
+    PhCaretRight
+} from '@phosphor-icons/vue';
 
 const router = useRouter();
 
@@ -177,7 +177,7 @@ function navigateFooter() {
             :aria-label="unreadCount > 0 ? `Buka notifikasi, ${unreadCount} pesan belum dibaca` : 'Buka notifikasi'"
             title="Notifikasi"
         >
-            <Bell :size="16" :stroke-width="1.75" />
+            <PhBell :size="16" weight="bold" aria-hidden="true" />
             <span
                 v-if="unreadCount > 0"
                 class="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 rounded-full bg-red-500 text-white text-[11px] font-bold flex items-center justify-center leading-none ring-2 ring-surface-0 dark:ring-surface-900"
@@ -211,7 +211,7 @@ function navigateFooter() {
                         aria-label="Tandai semua pesan notifikasi telah dibaca"
                         title="Tandai semua telah dibaca"
                     >
-                        <CheckCheck :size="13" />
+                        <PhChecks :size="14" weight="bold" aria-hidden="true" />
                         <span>Tandai dibaca</span>
                     </button>
                     <button
@@ -234,7 +234,7 @@ function navigateFooter() {
                     :class="[
                         'px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
                         notifTab === 'all'
-                            ? 'bg-primary text-white shadow-xs'
+                            ? 'bg-primary text-primary-contrast shadow-xs'
                             : 'text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800'
                     ]"
                 >
@@ -248,7 +248,7 @@ function navigateFooter() {
                     :class="[
                         'px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer',
                         notifTab === 'unread'
-                            ? 'bg-primary text-white shadow-xs'
+                            ? 'bg-primary text-primary-contrast shadow-xs'
                             : 'text-surface-600 dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800'
                     ]"
                 >
@@ -258,7 +258,7 @@ function navigateFooter() {
             <div class="max-h-[380px] overflow-y-auto divide-y divide-surface-100 dark:divide-surface-800/60">
                 <div v-if="displayedNotifications.length === 0" class="py-10 px-4 text-center">
                     <div class="w-10 h-10 rounded-full bg-surface-100 dark:bg-surface-800 flex items-center justify-center mx-auto mb-2.5 text-surface-400">
-                        <Inbox :size="20" />
+                        <PhTray :size="22" weight="regular" aria-hidden="true" />
                     </div>
                     <p class="text-xs font-medium text-surface-700 dark:text-surface-200">
                         {{ notifTab === 'unread' ? 'Semua notifikasi sudah dibaca' : 'Tidak ada notifikasi' }}
@@ -283,7 +283,7 @@ function navigateFooter() {
                     class="w-full py-1.5 text-xs font-semibold text-primary hover:text-primary-600 dark:hover:text-primary-400 hover:bg-surface-100 dark:hover:bg-surface-800 rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-1"
                 >
                     <span>{{ footerNavText }}</span>
-                    <ChevronRight :size="13" />
+                    <PhCaretRight :size="14" weight="bold" aria-hidden="true" />
                 </button>
             </div>
         </div>

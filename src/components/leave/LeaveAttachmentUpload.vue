@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import { useToast } from 'primevue/usetoast';
-import { UploadCloud, FileText, Trash2 } from 'lucide-vue-next';
+import { PhCloudArrowUp, PhFileText, PhTrash } from '@phosphor-icons/vue';
 
 const props = defineProps({
     modelValue: {
@@ -92,7 +92,7 @@ function removeFile() {
         >
             <div class="flex items-center gap-2.5 min-w-0">
                 <div class="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <FileText :size="18" />
+                    <PhFileText :size="16" weight="bold" aria-hidden="true" />
                 </div>
                 <div class="min-w-0">
                     <div class="text-xs font-semibold text-surface-900 dark:text-surface-0 truncate">
@@ -112,7 +112,7 @@ function removeFile() {
                 @click="removeFile"
                 title="Hapus / Ganti Dokumen"
             >
-                <Trash2 :size="15" />
+                <PhTrash :size="14" weight="bold" aria-hidden="true" />
             </button>
         </div>
 
@@ -129,7 +129,7 @@ function removeFile() {
                 @dragleave.prevent="isDragging = false"
                 @drop.prevent="handleDrop"
             >
-                <UploadCloud :size="24" class="text-muted-color group-hover:text-primary transition-colors" />
+                <PhCloudArrowUp :size="22" weight="regular" aria-hidden="true" class="text-muted-color group-hover:text-primary transition-colors" />
                 <div class="text-xs font-semibold text-surface-800 dark:text-surface-200">
                     Pilih Dokumen Pendukung Fisik
                 </div>

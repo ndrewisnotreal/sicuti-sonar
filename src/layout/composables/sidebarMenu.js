@@ -8,25 +8,26 @@ import {
     isApprovalOnly,
     can
 } from '@/service/sicutiService';
+// Kamus ikon menu: satu arti = satu ikon (audit-026). Ikon yang sama dipakai di judul halaman.
 import {
-    LayoutDashboard,
-    FileText,
-    Wallet,
-    Activity,
-    Users,
-    User,
-    Tag,
-    Calendar,
-    GitFork,
-    ShieldCheck,
-    FileSpreadsheet,
-    ClipboardCheck,
-    FileCheck,
-    FileClock,
-    Settings2,
-    FilePlus2,
-    CalendarDays
-} from 'lucide-vue-next';
+    PhSquaresFour,
+    PhFileText,
+    PhWallet,
+    PhClipboardText,
+    PhUsers,
+    PhUserGear,
+    PhTag,
+    PhCalendarSlash,
+    PhTreeStructure,
+    PhShieldCheck,
+    PhChartBar,
+    PhSealCheck,
+    PhClockCounterClockwise,
+    PhListMagnifyingGlass,
+    PhScroll,
+    PhFilePlus,
+    PhCalendarDots
+} from '@phosphor-icons/vue';
 
 const pendingRequestsCount = computed(() => {
     if (!currentUser.value) return 0;
@@ -47,8 +48,8 @@ export const sidebarModel = computed(() => {
     const admin = isAdmin(user);
     const superAdmin = isSuperAdmin(user);
 
-    const mainItems = [{ label: 'Dashboard', icon: LayoutDashboard, to: '/' }];
-    if (can('dashboard_laporan.view_calendar')) mainItems.push({ label: 'Kalender Cuti', icon: CalendarDays, to: '/calendar' });
+    const mainItems = [{ label: 'Dashboard', icon: PhSquaresFour, to: '/' }];
+    if (can('dashboard_laporan.view_calendar')) mainItems.push({ label: 'Kalender Cuti', icon: PhCalendarDots, to: '/calendar' });
     sections.push({ label: 'Menu Utama', items: mainItems });
 
     if (isApprover(user)) {
@@ -58,13 +59,13 @@ export const sidebarModel = computed(() => {
                 gated(
                     {
                         label: 'Validasi Pengajuan',
-                        icon: ClipboardCheck,
+                        icon: PhSealCheck,
                         to: '/approval/pending',
                         badge: sicutiState.pendingApprovalCount > 0 ? sicutiState.pendingApprovalCount : null
                     },
                     can('approval.view_requests', 'approval.validate')
                 ),
-                gated({ label: 'Riwayat Approval', icon: FileCheck, to: '/approval/history' }, can('approval.view_requests'))
+                gated({ label: 'Riwayat Approval', icon: PhClockCounterClockwise, to: '/approval/history' }, can('approval.view_requests'))
             ]
         });
     }
@@ -76,13 +77,13 @@ export const sidebarModel = computed(() => {
                 gated(
                     {
                         label: 'Pengajuan Cuti',
-                        icon: FileText,
+                        icon: PhFileText,
                         to: '/leave/history',
                         badge: pendingRequestsCount.value > 0 ? pendingRequestsCount.value : null
                     },
                     can('dokumen_saldo.view_history')
                 ),
-                gated({ label: 'Saldo Cuti', icon: Wallet, to: '/leave/balance' }, can('dokumen_saldo.view_balance'))
+                gated({ label: 'Saldo Cuti', icon: PhWallet, to: '/leave/balance' }, can('dokumen_saldo.view_balance'))
             ]
         });
     }
@@ -92,28 +93,28 @@ export const sidebarModel = computed(() => {
         sections.push({
             label: 'Master Data',
             items: [
-                gated({ label: 'Karyawan', icon: Users, to: '/admin/employees' }, canMaster),
-                gated({ label: 'Jenis Cuti', icon: Tag, to: '/admin/leave-types' }, canMaster),
-                gated({ label: 'Kebijakan Cuti', icon: Settings2, to: '/admin/policy' }, canMaster),
-                gated({ label: 'Hari Libur', icon: Calendar, to: '/admin/holidays' }, canMaster),
-                gated({ label: 'Alur Approval', icon: GitFork, to: '/admin/approval-flow' }, canMaster)
+                gated({ label: 'Karyawan', icon: PhUsers, to: '/admin/employees' }, canMaster),
+                gated({ label: 'Jenis Cuti', icon: PhTag, to: '/admin/leave-types' }, canMaster),
+                gated({ label: 'Kebijakan Cuti', icon: PhScroll, to: '/admin/policy' }, canMaster),
+                gated({ label: 'Hari Libur', icon: PhCalendarSlash, to: '/admin/holidays' }, canMaster),
+                gated({ label: 'Alur Approval', icon: PhTreeStructure, to: '/admin/approval-flow' }, canMaster)
             ]
         });
 
         sections.push({
             label: 'Transaksi',
             items: [
-                { label: 'Pengajuan Karyawan', icon: FilePlus2, to: '/admin/create-leave' },
-                gated({ label: 'Pemantauan Pengajuan', icon: Activity, to: '/admin/monitoring' }, superAdmin || can('master_data.view_processed')),
-                gated({ label: 'Saldo Cuti', icon: Wallet, to: '/admin/balances' }, canMaster)
+                { label: 'Pengajuan Karyawan', icon: PhFilePlus, to: '/admin/create-leave' },
+                gated({ label: 'Pemantauan Pengajuan', icon: PhClipboardText, to: '/admin/monitoring' }, superAdmin || can('master_data.view_processed')),
+                gated({ label: 'Saldo Cuti', icon: PhWallet, to: '/admin/balances' }, canMaster)
             ]
         });
 
         sections.push({
             label: 'Laporan',
             items: [
-                gated({ label: 'Laporan', icon: FileSpreadsheet, to: '/admin/reports' }, superAdmin || can('dashboard_laporan.view_reports')),
-                gated({ label: 'Audit Trail', icon: FileClock, to: '/admin/audit-trail' }, superAdmin || can('dashboard_laporan.view_audit'))
+                gated({ label: 'Laporan', icon: PhChartBar, to: '/admin/reports' }, superAdmin || can('dashboard_laporan.view_reports')),
+                gated({ label: 'Audit Trail', icon: PhListMagnifyingGlass, to: '/admin/audit-trail' }, superAdmin || can('dashboard_laporan.view_audit'))
             ]
         });
 
@@ -121,8 +122,8 @@ export const sidebarModel = computed(() => {
             sections.push({
                 label: 'Keamanan',
                 items: [
-                    { label: 'Manajemen Akun', icon: User, to: '/admin/accounts' },
-                    { label: 'Manajemen Hak Akses', icon: ShieldCheck, to: '/admin/permissions' }
+                    { label: 'Manajemen Akun', icon: PhUserGear, to: '/admin/accounts' },
+                    { label: 'Manajemen Hak Akses', icon: PhShieldCheck, to: '/admin/permissions' }
                 ]
             });
         }

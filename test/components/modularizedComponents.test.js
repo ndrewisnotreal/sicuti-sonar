@@ -88,11 +88,25 @@ describe('LeaveApprovalTimeline', () => {
             global: { stubs: { Tag: TagStub } }
         });
 
-        expect(w.text()).toContain('Tingkat 1: Hizkia R');
-        expect(w.text()).toContain('Tingkat 2: Kepala Seksi');
+        for (const t of ['Tingkat 1', 'Hizkia R', 'Tingkat 2', 'Kepala Seksi', '1 dari 2 tingkat disetujui']) expect(w.text()).toContain(t);
         expect(w.text()).toContain('Disetujui tanpa kendala');
         expect(w.text()).toContain('Disetujui');
         expect(w.text()).toContain('Sedang Ditinjau');
+    });
+});
+
+describe('LeaveApprovalTimeline setelah penolakan', () => {
+    it('tingkat sesudah penolakan tidak tampil sebagai menunggu antrean', () => {
+        const steps = [
+            { id: 's1', level: 1, approverName: 'A', status: 'rejected', notes: 'Kuota habis' },
+            { id: 's2', level: 2, approverName: 'B', status: 'pending', isCurrent: false },
+            { id: 's3', level: 3, approverName: 'C', status: 'pending', isCurrent: false }
+        ];
+        const text = mount(LeaveApprovalTimeline, { props: { steps } }).text();
+        expect(text).toContain('Ditolak di tingkat 1');
+        expect(text).not.toContain('Menunggu Antrean');
+        expect(text.match(/Tidak dilanjutkan/g)).toHaveLength(2);
+        expect(text).not.toContain('tingkat disetujui');
     });
 });
 
@@ -174,15 +188,26 @@ describe('ProfileAvatarSection', () => {
         });
 
         expect(w.find('img').exists()).toBe(true);
-        const btn = w.find('button[type="button"].text-rose-600');
-        expect(btn.text()).toContain('Hapus foto profil');
-        await btn.trigger('click');
+        const removeBtn = () => w.findAll('button').find((b) => /Hapus foto profil|Batalkan foto baru/.test(b.text()));
+        expect(removeBtn().text()).toContain('Hapus foto profil');
+        await removeBtn().trigger('click');
         expect(w.emitted('remove-photo')).toBeTruthy();
 
         await w.setProps({ isPendingPhoto: true });
-        expect(w.find('button[type="button"].text-rose-600').text()).toContain('Batalkan foto baru');
-        await w.find('button[type="button"].text-rose-600').trigger('click');
+        expect(removeBtn().text()).toContain('Batalkan foto baru');
+        await removeBtn().trigger('click');
         expect(w.emitted('cancel-photo')).toBeTruthy();
+    });
+
+    it('tidak mengarang peran/divisi saat data kosong; foto salah format ditulis di dekat tombol (audit-031 #1, #3)', async () => {
+        const w = mount(ProfileAvatarSection, { props: { name: 'Budi', nip: '123', roleName: '-', deptName: '', deptCode: '-' } });
+        expect(w.text()).not.toContain('Staff IT');
+        expect(w.text()).not.toContain('Smelter Information Technology');
+        const input = w.find('input[type="file"]');
+        Object.defineProperty(input.element, 'files', { value: [new File(['x'], 'a.gif', { type: 'image/gif' })] });
+        await input.trigger('change');
+        expect(w.find('[role="alert"]').text()).toContain('Format foto tidak didukung');
+        expect(toastAdd).not.toHaveBeenCalled();
     });
 });
 
@@ -241,7 +266,11 @@ describe('RoleFormDialog', () => {
         });
 
         await w.find('form').trigger('submit');
-        expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ summary: 'Nama peran wajib diisi' }));
+        await flushPromises();
+        // Validasi di bawah field, bukan toast (audit-025 #5).
+        expect(w.find('#role-name-error').text()).toBe('Nama peran wajib diisi');
+        expect(toastAdd).not.toHaveBeenCalled();
+        expect(rbacService.createRole).not.toHaveBeenCalled();
 
         await w.find('#role-name').setValue('Staff HRD');
         await w.find('form').trigger('submit');

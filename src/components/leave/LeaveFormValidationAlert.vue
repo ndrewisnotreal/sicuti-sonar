@@ -4,7 +4,7 @@
             v-if="returnNote"
             class="p-3.5 rounded-xl border text-xs bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-100 flex items-start gap-2.5"
         >
-            <AlertTriangle :size="18" class="text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+            <PhWarning :size="16" weight="bold" aria-hidden="true" class="text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
             <div>
                 <strong class="font-bold block mb-0.5">Dikembalikan{{ returnNote.approverName ? ` oleh ${returnNote.approverName}` : '' }}</strong>
                 <p class="leading-relaxed">{{ returnNote.notes || 'Tidak ada catatan. Periksa kembali data pengajuan sebelum mengajukan ulang.' }}</p>
@@ -21,8 +21,10 @@
             ]"
         >
             <div class="flex items-start gap-2.5">
-                <AlertTriangle
-                    :size="18"
+                <PhWarning
+                    :size="16"
+                    weight="bold"
+                    aria-hidden="true"
                     :class="validationAlert.severity === 'error' ? 'text-rose-600 dark:text-rose-400 mt-0.5 shrink-0' : 'text-amber-600 dark:text-amber-400 mt-0.5 shrink-0'"
                 />
                 <div>
@@ -36,14 +38,14 @@
                 @click="emit('dismiss')"
                 title="Tutup pesan"
             >
-                <X :size="14" />
+                <PhX :size="14" weight="bold" aria-hidden="true" />
             </button>
         </div>
     </div>
 </template>
 
 <script setup>
-import { AlertTriangle, X } from 'lucide-vue-next';
+import { PhWarning, PhX } from '@phosphor-icons/vue';
 
 defineProps({
     returnNote: {

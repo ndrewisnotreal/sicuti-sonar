@@ -1,8 +1,10 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { adminService } from '@/service/adminService';
 import { useToast } from 'primevue/usetoast';
 import { STATUS_REASON_OPTIONS, statusFormProblem } from '@/service/statusReason';
+import { passwordChecks, passwordProblem } from '@/utils/passwordRules';
+import { PhCheck, PhX } from '@phosphor-icons/vue';
 
 const props = defineProps({
     visible: {
@@ -32,6 +34,11 @@ const props = defineProps({
     adminDivision: {
         type: String,
         default: null
+    },
+    // Tambahan: daftar peran gagal dimuat di parent (audit-024 #2).
+    rolesError: {
+        type: Boolean,
+        default: false
     }
 });
 
@@ -174,20 +181,18 @@ function validateForm() {
     if (!form.value.username?.trim()) errs.username = 'Username wajib diisi';
     if (!form.value.nama?.trim()) errs.nama = 'Nama lengkap wajib diisi';
     if (!form.value.kd_role) errs.kd_role = 'Peran wajib dipilih';
-    if (!form.value.kd_dept) errs.kd_dept = 'Departemen wajib dipilih';
+    if (!form.value.kd_dept) errs.kd_dept = 'Divisi wajib dipilih';
 
     if (form.value.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.value.email)) {
         errs.email = 'Format email tidak valid';
     }
 
-    if (!props.isEditing) {
-        if (!form.value.password) {
-            errs.password = 'Password wajib diisi untuk akun baru';
-        } else if (form.value.password.length < 8) {
-            errs.password = 'Password minimal 8 karakter';
-        }
-    } else if (form.value.password && form.value.password.length < 8) {
-        errs.password = 'Password minimal 8 karakter';
+    // Aturan sama dengan backend (assertPasswordStrength) dan dialog atur ulang (audit-024 #1).
+    if (!props.isEditing && !form.value.password) {
+        errs.password = 'Kata sandi wajib diisi untuk akun baru';
+    } else if (form.value.password) {
+        const problem = passwordProblem(form.value.password);
+        if (problem) errs.password = problem.replace('Password baru', 'Kata sandi');
     }
 
     if (deactivating.value) {
@@ -199,8 +204,36 @@ function validateForm() {
     return Object.keys(errs).length === 0;
 }
 
+// Fokus ke field salah pertama, urut sesuai tampilan (DESIGN.md bagian Form, audit-024 #3).
+const FIELD_ORDER = [
+    ['username', 'acc-username'],
+    ['namecode', 'acc-nik'],
+    ['nama', 'acc-name'],
+    ['email', 'acc-email'],
+    ['kd_dept', 'acc-dept'],
+    ['kd_role', 'acc-role'],
+    ['password', 'acc-password'],
+    ['status_reason', 'acc-status-reason']
+];
+
+const passwordRules = computed(() => passwordChecks(form.value.password));
+const fieldError = (key) => formErrors.value[key] || '';
+const describedBy = (key, id) => (formErrors.value[key] ? `${id}-error` : undefined);
+
+const statusActive = computed({
+    get: () => form.value.status === 'A',
+    set: (v) => {
+        form.value.status = v ? 'A' : 'N';
+    }
+});
+
 async function saveAccount() {
-    if (!validateForm()) return;
+    if (!validateForm()) {
+        const first = FIELD_ORDER.find(([key]) => formErrors.value[key]);
+        await nextTick();
+        if (first) document.getElementById(first[1])?.focus();
+        return;
+    }
     saving.value = true;
     try {
         const payload = {
@@ -263,153 +296,197 @@ async function saveAccount() {
     <Dialog
         :visible="visible"
         modal
-        :header="isEditing ? 'Ubah Akun & Hak Akses Pengguna' : 'Tambah Akun Pengguna Baru'"
+        :header="isEditing ? 'Ubah Akun & Peran' : 'Tambah Akun Pengguna Baru'"
         :breakpoints="{ '960px': '75vw', '640px': '92vw' }"
-        :style="{ width: '540px' }"
+        :style="{ width: '560px' }"
         @update:visible="emit('update:visible', $event)"
     >
-        <div class="space-y-3.5 pt-2 text-xs">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <!-- Setiap field punya label terhubung; kesalahan di bawah field dengan aria-describedby (audit-024 #3). -->
+        <div class="space-y-4 pt-1 text-sm">
+            <p v-if="rolesError" role="alert" class="rounded-border bg-amber-100 dark:bg-amber-950/40 px-3 py-2 text-amber-900 dark:text-amber-100">
+                Daftar peran gagal dimuat, jadi akun belum bisa disimpan. Tutup dialog lalu tekan Segarkan.
+            </p>
+            <p class="text-xs text-surface-600 dark:text-surface-400"><span class="text-(--status-danger-fg)" aria-hidden="true">*</span> Wajib diisi</p>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                    <label class="block font-medium mb-1">Username <span class="text-rose-500">*</span></label>
+                    <label for="acc-username" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Username <span class="text-(--status-danger-fg)" aria-hidden="true">*</span></label>
                     <InputText
+                        id="acc-username"
                         v-model="form.username"
-                        class="w-full text-xs"
+                        class="w-full"
                         placeholder="Kosongkan untuk memakai NIK"
                         :disabled="isEditing"
+                        :invalid="Boolean(fieldError('username'))"
+                        :aria-invalid="Boolean(fieldError('username'))"
+                        :aria-describedby="describedBy('username', 'acc-username')"
                     />
-                    <small v-if="formErrors.username" class="text-rose-500 text-[11px]">{{ formErrors.username }}</small>
+                    <p v-if="fieldError('username')" id="acc-username-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ fieldError('username') }}</p>
                 </div>
                 <div>
-                    <label class="block font-medium mb-1">NIK / ID Pegawai</label>
-                    <InputText v-model="form.namecode" class="w-full text-xs" placeholder="Contoh: 24011021 / OS24980032" />
-                    <small v-if="formErrors.namecode" class="text-rose-500 text-[11px]">{{ formErrors.namecode }}</small>
+                    <label for="acc-nik" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">NIK / ID pegawai</label>
+                    <InputText
+                        id="acc-nik"
+                        v-model="form.namecode"
+                        class="w-full"
+                        placeholder="Contoh: 24011021 / OS24980032"
+                        :invalid="Boolean(fieldError('namecode'))"
+                        :aria-invalid="Boolean(fieldError('namecode'))"
+                        :aria-describedby="describedBy('namecode', 'acc-nik')"
+                    />
+                    <p v-if="fieldError('namecode')" id="acc-nik-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ fieldError('namecode') }}</p>
                 </div>
-            </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                    <label class="block font-medium mb-1">Nama Lengkap <span class="text-rose-500">*</span></label>
-                    <InputText v-model="form.nama" class="w-full text-xs" placeholder="Nama Lengkap" />
-                    <small v-if="formErrors.nama" class="text-rose-500 text-[11px]">{{ formErrors.nama }}</small>
+                    <label for="acc-name" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Nama lengkap <span class="text-(--status-danger-fg)" aria-hidden="true">*</span></label>
+                    <InputText
+                        id="acc-name"
+                        v-model="form.nama"
+                        class="w-full"
+                        aria-required="true"
+                        :invalid="Boolean(fieldError('nama'))"
+                        :aria-invalid="Boolean(fieldError('nama'))"
+                        :aria-describedby="describedBy('nama', 'acc-name')"
+                    />
+                    <p v-if="fieldError('nama')" id="acc-name-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ fieldError('nama') }}</p>
                 </div>
                 <div>
-                    <label class="block font-medium mb-1">Email</label>
-                    <InputText v-model="form.email" type="email" class="w-full text-xs" placeholder="nama@inalum.co.id" />
-                    <small v-if="formErrors.email" class="text-rose-500 text-[11px]">{{ formErrors.email }}</small>
+                    <label for="acc-email" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Email</label>
+                    <InputText
+                        id="acc-email"
+                        v-model="form.email"
+                        type="email"
+                        class="w-full"
+                        placeholder="nama@inalum.co.id"
+                        :invalid="Boolean(fieldError('email'))"
+                        :aria-invalid="Boolean(fieldError('email'))"
+                        :aria-describedby="describedBy('email', 'acc-email')"
+                    />
+                    <p v-if="fieldError('email')" id="acc-email-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ fieldError('email') }}</p>
                 </div>
-            </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                    <label class="block font-medium mb-1">Departemen <span class="text-rose-500">*</span></label>
+                    <label for="acc-dept" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Divisi <span class="text-(--status-danger-fg)" aria-hidden="true">*</span></label>
                     <Select
                         v-model="form.kd_dept"
+                        inputId="acc-dept"
                         :options="deptSelectOptions"
                         optionLabel="nm_dept"
                         optionValue="kd_dept"
                         :disabled="Boolean(adminDivision)"
-                        placeholder="Pilih Departemen"
-                        class="w-full text-xs"
+                        placeholder="Pilih divisi"
+                        class="w-full"
+                        :invalid="Boolean(fieldError('kd_dept'))"
+                        :aria-describedby="describedBy('kd_dept', 'acc-dept')"
                     />
-                    <small v-if="formErrors.kd_dept" class="text-rose-500 text-[11px]">{{ formErrors.kd_dept }}</small>
+                    <p v-if="fieldError('kd_dept')" id="acc-dept-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ fieldError('kd_dept') }}</p>
                 </div>
                 <div>
-                    <label class="block font-medium mb-1">Jabatan / Posisi</label>
-                    <InputText v-model="form.position" class="w-full text-xs" placeholder="Staff IT / Analis" />
+                    <label for="acc-position" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Jabatan / posisi</label>
+                    <InputText id="acc-position" v-model="form.position" class="w-full" placeholder="Staff IT / Analis" />
                 </div>
-            </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                    <label for="account-join" class="block font-medium mb-1">Tanggal Masuk</label>
+                    <label for="account-join" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Tanggal masuk</label>
                     <DatePicker v-model="form.join_date" inputId="account-join" dateFormat="dd M yy" showIcon iconDisplay="input" placeholder="Pilih tanggal" fluid />
                 </div>
                 <div>
-                    <label for="account-employment" class="block font-medium mb-1">Status Kepegawaian</label>
+                    <label for="account-employment" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Status kepegawaian</label>
                     <Select
                         v-model="form.employment_status"
                         inputId="account-employment"
                         :options="EMPLOYMENT_OPTIONS"
                         optionLabel="label"
                         optionValue="value"
-                        class="w-full text-xs"
+                        class="w-full"
                     />
                 </div>
-            </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                    <label class="block font-medium mb-1">Peran Pengguna <span class="text-rose-500">*</span></label>
+                    <label for="acc-role" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Peran pengguna <span class="text-(--status-danger-fg)" aria-hidden="true">*</span></label>
                     <Select
                         v-model="form.kd_role"
+                        inputId="acc-role"
                         :options="roleOptions"
                         optionLabel="label"
                         optionValue="value"
-                        placeholder="Pilih Peran"
-                        class="w-full text-xs"
+                        placeholder="Pilih peran"
+                        class="w-full"
+                        :disabled="rolesError"
+                        :invalid="Boolean(fieldError('kd_role'))"
+                        :aria-describedby="describedBy('kd_role', 'acc-role')"
                     />
-                    <small v-if="formErrors.kd_role" class="text-rose-500 text-[11px]">{{ formErrors.kd_role }}</small>
+                    <p v-if="fieldError('kd_role')" id="acc-role-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ fieldError('kd_role') }}</p>
                 </div>
                 <div>
-                    <label class="block font-medium mb-1">Atasan Langsung</label>
+                    <label for="acc-supervisor" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Atasan langsung</label>
                     <Select
                         v-model="form.supervisor_id"
+                        inputId="acc-supervisor"
                         :options="supervisorOptions"
                         optionLabel="label"
                         optionValue="value"
                         filter
-                        placeholder="Pilih Atasan"
-                        class="w-full text-xs"
+                        placeholder="Pilih atasan"
+                        class="w-full"
+                        aria-describedby="acc-supervisor-help"
                     />
-                    <p class="text-[11px] text-muted-color mt-1">Informasi struktur saja; approver cuti diatur di menu Alur Approval.</p>
+                    <p id="acc-supervisor-help" class="mt-1 text-xs text-surface-600 dark:text-surface-400">Informasi struktur saja; approver cuti diatur di menu Alur Approval.</p>
                 </div>
             </div>
 
             <div>
-                <label class="block font-medium mb-1">
-                    {{ isEditing ? 'Password Baru (kosongkan jika tidak ingin mengubah)' : 'Password Akun *' }}
+                <label for="acc-password" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">
+                    {{ isEditing ? 'Kata sandi baru' : 'Kata sandi' }}
+                    <span v-if="!isEditing" class="text-(--status-danger-fg)" aria-hidden="true">*</span>
                 </label>
                 <InputText
+                    id="acc-password"
                     v-model="form.password"
                     type="password"
-                    class="w-full text-xs"
-                    placeholder="Minimal 8 karakter"
+                    class="w-full"
+                    autocomplete="new-password"
+                    :invalid="Boolean(fieldError('password'))"
+                    :aria-invalid="Boolean(fieldError('password'))"
+                    :aria-describedby="fieldError('password') ? 'acc-password-error acc-password-rules' : 'acc-password-rules'"
                 />
-                <small v-if="formErrors.password" class="text-rose-500 text-[11px]">{{ formErrors.password }}</small>
+                <p v-if="fieldError('password')" id="acc-password-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ fieldError('password') }}</p>
+                <p v-if="isEditing" class="mt-1 text-xs text-surface-600 dark:text-surface-400">Kosongkan bila kata sandi tidak diubah.</p>
+                <!-- Syarat sama dengan backend dan dialog atur ulang (audit-024 #1). -->
+                <ul id="acc-password-rules" class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 text-xs" aria-live="polite">
+                    <li v-for="c in passwordRules" :key="c.label" class="flex items-center gap-1.5" :class="c.ok ? 'text-(--status-success-fg)' : 'text-surface-600 dark:text-surface-400'">
+                        <PhCheck v-if="c.ok" :size="14" weight="bold" aria-hidden="true" />
+                        <PhX v-else :size="14" weight="bold" aria-hidden="true" />
+                        <span>{{ c.label }}<span class="sr-only">{{ c.ok ? ': terpenuhi' : ': belum' }}</span></span>
+                    </li>
+                </ul>
             </div>
 
-            <div v-if="!form.is_super" class="flex items-center gap-2 pt-1">
-                <input
-                    type="checkbox"
-                    id="formStatus"
-                    :checked="form.status === 'A'"
-                    @change="form.status = $event.target.checked ? 'A' : 'N'"
-                    class="cursor-pointer rounded text-primary focus:ring-primary"
-                />
-                <label for="formStatus" class="font-medium cursor-pointer">
-                    Status Akun Aktif
-                </label>
+            <div v-if="!form.is_super" class="flex items-center gap-2 min-h-11 sm:min-h-9">
+                <Checkbox v-model="statusActive" :binary="true" inputId="formStatus" />
+                <label for="formStatus" class="font-medium text-surface-900 dark:text-surface-100 cursor-pointer">Status akun aktif</label>
             </div>
 
-            <div v-if="deactivating" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div v-if="deactivating" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                    <label for="form-status-reason" class="block font-medium mb-1">Alasan Nonaktif <span class="text-rose-500">*</span></label>
+                    <label for="acc-status-reason" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Alasan nonaktif <span class="text-(--status-danger-fg)" aria-hidden="true">*</span></label>
                     <Select
-                        inputId="form-status-reason"
+                        inputId="acc-status-reason"
                         v-model="form.status_reason"
                         :options="STATUS_REASON_OPTIONS"
                         optionLabel="label"
                         optionValue="value"
                         placeholder="Pilih alasan"
-                        class="w-full text-xs"
+                        class="w-full"
+                        :invalid="Boolean(fieldError('status_reason'))"
+                        :aria-describedby="describedBy('status_reason', 'acc-status-reason')"
                     />
                 </div>
                 <div>
-                    <label class="block font-medium mb-1">Keterangan<span v-if="form.status_reason === 'LAINNYA'" class="text-rose-500"> *</span></label>
-                    <InputText v-model="form.status_note" class="w-full text-xs" placeholder="Mis. kontrak berakhir 30 Sep 2026" />
+                    <label for="acc-status-note" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Keterangan<span v-if="form.status_reason === 'LAINNYA'" class="text-(--status-danger-fg)" aria-hidden="true"> *</span></label>
+                    <InputText id="acc-status-note" v-model="form.status_note" class="w-full" placeholder="Mis. kontrak berakhir 30 Sep 2026" />
                 </div>
-                <small v-if="formErrors.status_reason" class="sm:col-span-2 text-rose-500 text-[11px]">{{ formErrors.status_reason }}</small>
+                <p v-if="fieldError('status_reason')" id="acc-status-reason-error" class="sm:col-span-2 text-xs text-(--status-danger-fg)">{{ fieldError('status_reason') }}</p>
             </div>
         </div>
 
@@ -428,6 +505,7 @@ async function saveAccount() {
                     size="small"
                     class="font-bold"
                     :loading="saving"
+                    :disabled="rolesError"
                     @click="saveAccount"
                 />
             </div>

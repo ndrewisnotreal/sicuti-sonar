@@ -13,22 +13,14 @@ import {
 } from '@/service/sicutiService';
 import { useToast } from 'primevue/usetoast';
 import { downloadExcel, printReportPdf } from '@/utils/reportExport';
-import {
-    FileSpreadsheet,
-    FileText,
-    Calendar,
-    Search,
-    RefreshCw,
-    BarChart3,
-    Wallet,
-    PieChart
-} from 'lucide-vue-next';
+import { PhFileXls, PhFileText, PhMagnifyingGlass, PhArrowsClockwise, PhChartBar } from '@phosphor-icons/vue';
 import ReportLeaveHistoryTable from '@/components/admin/reports/ReportLeaveHistoryTable.vue';
 import ReportBalanceTable from '@/components/admin/reports/ReportBalanceTable.vue';
 import ReportLeaveTypeSummary from '@/components/admin/reports/ReportLeaveTypeSummary.vue';
 
 const toast = useToast();
 const loading = ref(false);
+const summaryLoading = ref(false);
 const exporting = ref(false);
 const adminDivision = computed(() => getAdminDivision(currentUser.value));
 const isSuper = computed(() => isSuperAdmin(currentUser.value));
@@ -40,6 +32,13 @@ const balanceReports = ref([]);
 const typeSummary = ref([]);
 const leaveTypes = ref([]);
 const departments = ref([]);
+
+// Gagal per sumber, agar gagal dimuat tidak tampil sebagai angka 0 (audit-022 #1).
+const requestsError = ref(false);
+const balancesError = ref(false);
+const summaryError = ref(false);
+const leaveTypesError = ref(false);
+const departmentsError = ref(false);
 
 const selectedYear = ref(new Date().getFullYear());
 const yearOptions = YEAR_OPTIONS;
@@ -59,17 +58,27 @@ const rangeStart = computed(() => iso(dateRange.value?.[0]));
 const rangeEnd = computed(() => iso(dateRange.value?.[1] || dateRange.value?.[0]));
 const targetDept = computed(() => adminDivision.value || departmentFilter.value || null);
 
-const exportParams = computed(() => ({
-    year: selectedYear.value,
-    kd_dept: targetDept.value || undefined,
-    kd_leave_type: leaveTypeFilter.value || undefined,
-    status: statusFilter.value || undefined,
-    start_date: rangeStart.value,
-    end_date: rangeEnd.value,
-    search: searchQuery.value.trim() || undefined
-}));
+// Ekspor hanya membawa filter yang terlihat di tab aktif, sehingga berkas sama dengan layar (audit-022 #2).
+const exportParams = computed(() => {
+    const base = { year: selectedYear.value, kd_dept: targetDept.value || undefined };
+    const search = searchQuery.value.trim() || undefined;
+    if (activeTab.value === 0) {
+        return {
+            ...base,
+            kd_leave_type: leaveTypeFilter.value || undefined,
+            status: statusFilter.value || undefined,
+            start_date: rangeStart.value,
+            end_date: rangeEnd.value,
+            search
+        };
+    }
+    if (activeTab.value === 1) return { ...base, search };
+    return { ...base, start_date: rangeStart.value, end_date: rangeEnd.value };
+});
 
 async function loadSummary() {
+    summaryLoading.value = true;
+    summaryError.value = false;
     try {
         const res = await api.get('/sicuti/report/leave-type-summary', {
             year: selectedYear.value,
@@ -80,27 +89,48 @@ async function loadSummary() {
         typeSummary.value = Array.isArray(res?.data) ? res.data : [];
     } catch {
         typeSummary.value = [];
+        summaryError.value = true;
+    } finally {
+        summaryLoading.value = false;
     }
 }
 
 async function loadData() {
     loading.value = true;
-    try {
-        const [repData, balData, typesData, deptsData] = await Promise.all([
-            adminService.getLeaveRequests({ year: selectedYear.value }),
-            adminService.getBalances(selectedYear.value).catch(() => []),
-            adminService.getLeaveTypes().catch(() => []),
-            adminService.getDepartments().catch(() => [])
-        ]);
-        leaveReports.value = Array.isArray(repData) ? repData : [];
-        balanceReports.value = Array.isArray(balData) ? balData : [];
-        leaveTypes.value = Array.isArray(typesData) ? typesData : [];
-        departments.value = Array.isArray(deptsData) ? deptsData : [];
-        await loadSummary();
-    } catch (err) {
-        toast.add({ severity: 'error', summary: 'Gagal Memuat Laporan', detail: err.message || 'Gagal mengambil data laporan cuti', life: 3000 });
-    } finally {
-        loading.value = false;
+    requestsError.value = false;
+    balancesError.value = false;
+    leaveTypesError.value = false;
+    departmentsError.value = false;
+    // Pemanggilan dan parameter sama; tiap sumber kini dicatat gagal/berhasil sendiri.
+    const [rep, bal, types, depts] = await Promise.allSettled([
+        adminService.getLeaveRequests({ year: selectedYear.value }),
+        adminService.getBalances(selectedYear.value),
+        adminService.getLeaveTypes(),
+        adminService.getDepartments()
+    ]);
+    if (rep.status === 'fulfilled') {
+        leaveReports.value = Array.isArray(rep.value) ? rep.value : [];
+    } else {
+        leaveReports.value = [];
+        requestsError.value = true;
+    }
+    if (bal.status === 'fulfilled') {
+        balanceReports.value = Array.isArray(bal.value) ? bal.value : [];
+    } else {
+        balanceReports.value = [];
+        balancesError.value = true;
+    }
+    if (types.status === 'fulfilled') leaveTypes.value = Array.isArray(types.value) ? types.value : [];
+    else leaveTypesError.value = true;
+    if (depts.status === 'fulfilled') departments.value = Array.isArray(depts.value) ? depts.value : [];
+    else departmentsError.value = true;
+
+    await loadSummary();
+    loading.value = false;
+
+    if (rep.status === 'rejected' || bal.status === 'rejected' || summaryError.value) {
+        const err = rep.reason || bal.reason;
+        toast.add({ severity: 'error', summary: 'Gagal Memuat Laporan', detail: err?.message || 'Sebagian data laporan gagal dimuat', life: 3000 });
     }
 }
 
@@ -111,6 +141,8 @@ const leaveTypeOptions = computed(() => [
     { label: 'Semua Jenis Cuti', value: null },
     ...leaveTypes.value.map((t) => ({ label: t.nm_leave_type || t.name, value: t.kd_leave_type || t.id }))
 ]);
+
+const departmentOptions = computed(() => [{ label: 'Semua Divisi', value: null }, ...departments.value.map((d) => ({ label: `${d.nm_dept} (${d.kd_dept})`, value: d.kd_dept }))]);
 
 const filteredLeaveReports = computed(() =>
     leaveReports.value.filter((r) => {
@@ -141,24 +173,70 @@ const filteredBalanceReports = computed(() =>
     })
 );
 
+// Per tab: jumlah baris, status gagal, dan filter yang terlihat.
+const tabs = computed(() => [
+    { label: 'Riwayat Cuti', count: filteredLeaveReports.value.length, error: requestsError.value },
+    { label: 'Saldo Karyawan', count: filteredBalanceReports.value.length, error: balancesError.value },
+    { label: 'Rekap per Jenis Cuti', count: typeSummary.value.length, error: summaryError.value }
+]);
+const activeError = computed(() => tabs.value[activeTab.value].error);
+const activeLoading = computed(() => loading.value || (activeTab.value === 2 && summaryLoading.value));
+
+const hasFilters = computed(() => {
+    const dept = !adminDivision.value && departmentFilter.value;
+    if (activeTab.value === 0) return Boolean(searchQuery.value.trim() || dept || dateRange.value || leaveTypeFilter.value || statusFilter.value);
+    if (activeTab.value === 1) return Boolean(searchQuery.value.trim() || dept);
+    return Boolean(dept || dateRange.value);
+});
+
+function resetFilters() {
+    searchQuery.value = '';
+    departmentFilter.value = null;
+    dateRange.value = null;
+    leaveTypeFilter.value = null;
+    statusFilter.value = null;
+}
+
+const emptyText = computed(() => {
+    if (activeLoading.value) return 'Memuat data laporan...';
+    if (activeError.value) return 'Data laporan belum termuat.';
+    if (hasFilters.value) return 'Tidak ada data yang cocok dengan pencarian atau filter.';
+    return ['Belum ada pengajuan cuti pada tahun ini.', 'Belum ada data saldo cuti pada tahun ini.', 'Belum ada jenis cuti.'][activeTab.value];
+});
+
 const remaining = (b) => (b.remaining !== undefined ? b.remaining : Number(b.annual_quota || 0) + Number(b.carry_over_days || 0) - Number(b.used_days || 0));
 const scopeLabel = computed(() => {
     const parts = [targetDept.value ? `Divisi ${targetDept.value}` : 'Semua divisi', `Tahun ${selectedYear.value}`];
-    if (rangeStart.value) parts.push(`${formatDate(rangeStart.value)} – ${formatDate(rangeEnd.value)}`);
+    if (rangeStart.value && activeTab.value !== 1) parts.push(`${formatDate(rangeStart.value)} – ${formatDate(rangeEnd.value)}`);
     return parts.join(' · ');
 });
 
+// Ekspor ditolak bila data tab gagal dimuat atau kosong (audit-022 #3, pola item 06/12).
+function canExport() {
+    if (activeError.value) {
+        toast.add({ severity: 'warn', summary: 'Data belum termuat', detail: 'Muat ulang data laporan sebelum mengekspor.', life: 3000 });
+        return false;
+    }
+    if (!tabs.value[activeTab.value].count) {
+        toast.add({ severity: 'warn', summary: 'Tidak ada data', detail: 'Tidak ada data yang sesuai filter untuk diekspor.', life: 3000 });
+        return false;
+    }
+    return true;
+}
+
 async function exportExcel() {
+    if (!canExport()) return;
     exporting.value = true;
     try {
         const types = ['leave-request', 'leave-balance', 'leave-type-summary'];
         const filenames = [
-            `laporan_cuti_${selectedYear.value}.xlsx`,
-            `rekap_saldo_${selectedYear.value}.xlsx`,
-            `rekap_jenis_cuti_${selectedYear.value}.xlsx`
+            `laporan_cuti_${selectedYear.value}.csv`,
+            `rekap_saldo_${selectedYear.value}.csv`,
+            `rekap_jenis_cuti_${selectedYear.value}.csv`
         ];
         await downloadExcel('/sicuti/report/export', { type: types[activeTab.value], ...exportParams.value }, filenames[activeTab.value]);
-        toast.add({ severity: 'success', summary: 'Ekspor Berhasil', detail: 'Berkas Excel berhasil diunduh.', life: 3000 });
+        // Backend mengirim text/csv (report.controller.ts), jadi pesan menyebut CSV (audit-022 #11).
+        toast.add({ severity: 'success', summary: 'Ekspor Berhasil', detail: 'Berkas CSV diunduh (bisa dibuka di Excel).', life: 3000 });
     } catch (err) {
         toast.add({ severity: 'error', summary: 'Gagal Ekspor', detail: err.message, life: 4000 });
     } finally {
@@ -167,6 +245,7 @@ async function exportExcel() {
 }
 
 function exportPdf() {
+    if (!canExport()) return;
     const configs = [
         {
             title: 'Laporan Rekapitulasi Riwayat Cuti',
@@ -192,6 +271,8 @@ function exportPdf() {
                 { header: 'NIK', value: (b) => b.namecode || '-' },
                 { header: 'Nama Karyawan', value: (b) => b.nama },
                 { header: 'Divisi', value: (b) => b.kd_dept || '-' },
+                // Terpakai dihitung per periode cuti karyawan; kolom sama dengan berkas CSV backend (audit-022 #10).
+                { header: 'Periode', value: (b) => b.period_label || '-' },
                 { header: 'Kuota', value: (b) => b.annual_quota },
                 { header: 'Carry Over', value: (b) => b.carry_over_days || 0 },
                 { header: 'Terpakai', value: (b) => b.used_days || 0 },
@@ -224,119 +305,136 @@ onMounted(loadData);
 
 <template>
     <div class="space-y-6">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-                <h1 class="text-xl font-bold text-surface-900 dark:text-surface-100 flex items-center gap-2">
-                    <BarChart3 class="text-primary w-5 h-5" />
-                    <span>Laporan & Ekspor Data Cuti</span>
-                </h1>
-                <p class="text-xs text-muted-color">
-                    Rekapitulasi riwayat pengajuan, saldo, dan penggunaan per jenis cuti
-                    <span v-if="adminDivision" class="font-bold text-primary">Divisi {{ adminDivision }}</span>
-                </p>
-            </div>
-            <div class="flex flex-wrap items-center gap-2">
-                <Button severity="secondary" outlined size="small" class="text-xs font-semibold flex items-center gap-1.5" :loading="loading" @click="loadData">
-                    <RefreshCw :size="14" :stroke-width="1.75" />
-                    <span>Segarkan</span>
-                </Button>
-                <Button data-tour="rep-pdf" severity="secondary" outlined size="small" class="text-xs font-semibold flex items-center gap-1.5" @click="exportPdf">
-                    <FileText :size="14" :stroke-width="1.75" />
-                    <span>Ekspor PDF</span>
-                </Button>
-                <Button data-tour="export-excel" severity="success" size="small" class="text-xs font-bold flex items-center gap-1.5" :loading="exporting" @click="exportExcel">
-                    <FileSpreadsheet :size="14" :stroke-width="2" />
-                    <span>Ekspor Excel</span>
-                </Button>
-            </div>
-        </div>
-
-        <div data-tour="rep-tabs" class="flex flex-wrap items-center gap-2 border-b border-surface-200 dark:border-surface-700 pb-2" role="tablist" aria-label="Jenis laporan">
-            <button
-                v-for="(t, i) in [
-                    { label: 'Rekapitulasi Riwayat Cuti', icon: Calendar, count: filteredLeaveReports.length },
-                    { label: 'Rekapitulasi Saldo Karyawan', icon: Wallet, count: filteredBalanceReports.length },
-                    { label: 'Rekap per Jenis Cuti', icon: PieChart, count: typeSummary.length }
-                ]"
-                :key="t.label"
-                type="button"
-                role="tab"
-                :aria-selected="activeTab === i"
-                :class="[
-                    'px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-2',
-                    activeTab === i ? 'bg-primary text-white shadow-sm' : 'text-surface-600 dark:text-surface-300 hover:bg-surface-100 dark:hover:bg-surface-800'
-                ]"
-                @click="activeTab = i"
-            >
-                <component :is="t.icon" :size="14" />
-                <span>{{ t.label }}</span>
-                <span class="ml-1 px-1.5 rounded-full text-[11px]" :class="activeTab === i ? 'bg-white/20 text-white' : 'bg-surface-200 dark:bg-surface-700 text-surface-700 dark:text-surface-300'">
-                    {{ t.count }}
-                </span>
-            </button>
-        </div>
-
-        <div data-tour="rep-filters" class="card border border-surface-200 dark:border-surface-700 p-4 rounded-xl bg-surface-0 dark:bg-surface-900 shadow-sm">
-            <div class="flex flex-wrap items-center gap-3">
-                <IconField v-if="activeTab !== 2" iconPosition="left" class="w-full sm:w-60">
-                    <InputIcon class="!flex items-center justify-center">
-                        <Search :size="14" :stroke-width="1.75" class="text-muted-color" />
-                    </InputIcon>
-                    <InputText id="cari-laporan" name="cari-laporan" aria-label="Cari laporan berdasarkan karyawan atau NIK" v-model="searchQuery" placeholder="Cari Karyawan / NIK..." class="w-full text-xs" size="small" />
-                </IconField>
-                <Select v-model="selectedYear" :options="yearOptions" optionLabel="label" optionValue="value" placeholder="Pilih Tahun" class="w-full sm:w-36 text-xs" size="small" />
-                <div
-                    v-if="adminDivision"
-                    class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-surface-100 dark:bg-surface-800 text-surface-700 dark:text-surface-300 border border-surface-200 dark:border-surface-700"
-                >
-                    <span class="text-muted-color">Divisi:</span> <span class="text-primary font-bold">{{ adminDivision }}</span>
+        <!-- Satu kartu: judul dan aksi, tab, filter, lalu hasil (acuan 00b §6.1, audit-022 #8). -->
+        <div class="card !mb-0">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 class="text-xl font-bold text-surface-900 dark:text-surface-100 flex items-center gap-2">
+                        <PhChartBar :size="22" weight="regular" class="text-primary shrink-0" aria-hidden="true" />
+                        <span>Laporan & Ekspor Data Cuti</span>
+                    </h1>
+                    <p class="text-xs text-muted-color">
+                        Rekapitulasi riwayat pengajuan, saldo, dan penggunaan per jenis cuti<template v-if="adminDivision"> Divisi {{ adminDivision }}</template>. Ekspor mengikuti tab dan filter yang terlihat.
+                    </p>
                 </div>
-                <Select
-                    v-else-if="isSuper"
-                    v-model="departmentFilter"
-                    :options="[{ label: 'Semua Divisi', value: null }, ...departments.map((d) => ({ label: `${d.nm_dept} (${d.kd_dept})`, value: d.kd_dept }))]"
-                    optionLabel="label"
-                    optionValue="value"
-                    placeholder="Pilih Divisi"
-                    class="w-full sm:w-44 text-xs"
-                    size="small"
-                />
-                <DatePicker
-                    v-if="activeTab !== 1"
-                    v-model="dateRange"
-                    selectionMode="range"
-                    :manualInput="false"
-                    dateFormat="dd M yy"
-                    placeholder="Rentang tanggal cuti"
-                    showIcon
-                    showButtonBar
-                    class="w-full sm:w-64 text-xs"
-                    inputClass="text-xs"
-                    aria-label="Rentang tanggal cuti"
-                />
-                <template v-if="activeTab === 0">
-                    <Select v-model="leaveTypeFilter" :options="leaveTypeOptions" optionLabel="label" optionValue="value" placeholder="Jenis Cuti" class="w-full sm:w-44 text-xs" size="small" />
-                    <Select v-model="statusFilter" :options="statusOptions" optionLabel="label" optionValue="value" placeholder="Pilih Status" class="w-full sm:w-44 text-xs" size="small" />
-                </template>
+                <div class="flex flex-wrap items-center gap-2">
+                    <Button severity="secondary" outlined size="small" class="text-xs font-semibold flex items-center gap-1.5 !min-h-11 sm:!min-h-9" :loading="loading" @click="loadData">
+                        <PhArrowsClockwise :size="14" weight="bold" aria-hidden="true" />
+                        <span>Segarkan</span>
+                    </Button>
+                    <Button data-tour="rep-pdf" severity="secondary" outlined size="small" class="text-xs font-semibold flex items-center gap-1.5 !min-h-11 sm:!min-h-9" :disabled="activeLoading" @click="exportPdf">
+                        <PhFileText :size="14" weight="bold" aria-hidden="true" />
+                        <span>Ekspor PDF</span>
+                    </Button>
+                    <Button data-tour="export-excel" severity="success" size="small" class="text-xs font-bold flex items-center gap-1.5 !min-h-11 sm:!min-h-9" :disabled="activeLoading" :loading="exporting" @click="exportExcel">
+                        <PhFileXls :size="14" weight="bold" aria-hidden="true" />
+                        <span>Ekspor CSV</span>
+                    </Button>
+                </div>
             </div>
+
+            <!-- Tabs PrimeVue: role tab/tabpanel, aria-controls, dan navigasi panah/Home/End bawaan (audit-022 #4). -->
+            <Tabs v-model:value="activeTab" class="mt-6">
+                <TabList data-tour="rep-tabs" aria-label="Jenis laporan">
+                    <!-- Di HP ketiga tab berbagi lebar dan labelnya membungkus, agar tidak ada tab yang tersembunyi di balik gulir. -->
+                    <Tab v-for="(t, i) in tabs" :key="t.label" :value="i" class="!min-h-11 text-sm flex-1 sm:flex-none !whitespace-normal !px-2 sm:!px-4 flex flex-col sm:flex-row items-center justify-center text-center gap-x-2 leading-tight">
+                        <span>{{ t.label }}</span>
+                        <span class="text-xs font-normal tabular-nums text-surface-600 dark:text-surface-400">{{ loading || t.error ? '–' : t.count }}</span>
+                    </Tab>
+                </TabList>
+
+                <div data-tour="rep-filters" class="mt-5 space-y-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                        <div v-if="activeTab !== 2">
+                            <span class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1" aria-hidden="true">Cari</span>
+                            <IconField iconPosition="left" class="w-full">
+                                <InputIcon class="!flex items-center justify-center">
+                                    <PhMagnifyingGlass :size="14" weight="bold" class="text-muted-color" aria-hidden="true" />
+                                </InputIcon>
+                                <InputText id="cari-laporan" name="cari-laporan" aria-label="Cari laporan berdasarkan karyawan atau NIK" v-model="searchQuery" placeholder="Cari Karyawan / NIK..." class="w-full text-xs !min-h-11 sm:!min-h-9" size="small" />
+                            </IconField>
+                        </div>
+                        <div>
+                            <span id="rep-year-label" class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1">Tahun</span>
+                            <Select v-model="selectedYear" :options="yearOptions" optionLabel="label" optionValue="value" placeholder="Pilih Tahun" ariaLabelledby="rep-year-label" class="w-full text-xs !min-h-11 sm:!min-h-9" size="small" />
+                        </div>
+                        <div v-if="adminDivision">
+                            <span class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1">Divisi</span>
+                            <p class="min-h-11 sm:min-h-9 flex items-center text-sm font-semibold text-surface-900 dark:text-surface-100">{{ adminDivision }}</p>
+                        </div>
+                        <div v-else-if="isSuper">
+                            <span id="rep-dept-label" class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1">Divisi</span>
+                            <Select
+                                v-model="departmentFilter"
+                                :options="departmentOptions"
+                                optionLabel="label"
+                                optionValue="value"
+                                placeholder="Semua Divisi"
+                                ariaLabelledby="rep-dept-label"
+                                class="w-full text-xs !min-h-11 sm:!min-h-9"
+                                :disabled="departmentsError && !departments.length"
+                                size="small"
+                            />
+                        </div>
+                        <div v-if="activeTab !== 1">
+                            <span class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1" aria-hidden="true">Rentang tanggal cuti</span>
+                            <DatePicker
+                                v-model="dateRange"
+                                selectionMode="range"
+                                :manualInput="false"
+                                dateFormat="dd M yy"
+                                placeholder="Semua tanggal"
+                                showIcon
+                                iconDisplay="input"
+                                showButtonBar
+                                size="small"
+                                fluid
+                                inputClass="text-xs !min-h-11 sm:!min-h-9"
+                                aria-label="Rentang tanggal cuti"
+                            />
+                        </div>
+                        <template v-if="activeTab === 0">
+                            <div>
+                                <span id="rep-type-label" class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1">Jenis cuti</span>
+                                <Select v-model="leaveTypeFilter" :options="leaveTypeOptions" optionLabel="label" optionValue="value" placeholder="Semua Jenis Cuti" ariaLabelledby="rep-type-label" class="w-full text-xs !min-h-11 sm:!min-h-9" :disabled="leaveTypesError && !leaveTypes.length" size="small" />
+                            </div>
+                            <div>
+                                <span id="rep-status-label" class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1">Status</span>
+                                <Select v-model="statusFilter" :options="statusOptions" optionLabel="label" optionValue="value" placeholder="Semua Status" ariaLabelledby="rep-status-label" class="w-full text-xs !min-h-11 sm:!min-h-9" size="small" />
+                            </div>
+                        </template>
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <p class="text-xs text-muted-color" aria-live="polite">
+                            Menampilkan <span class="font-bold text-surface-900 dark:text-surface-100">{{ activeLoading || activeError ? '–' : tabs[activeTab].count }}</span>
+                            {{ ['pengajuan', 'karyawan', 'jenis cuti'][activeTab] }}
+                        </p>
+                        <Button v-if="hasFilters" label="Atur ulang filter" severity="secondary" text size="small" class="text-xs !min-h-11 sm:!min-h-9" @click="resetFilters" />
+                    </div>
+
+                    <p v-if="(isSuper && !adminDivision && departmentsError) || (activeTab === 0 && leaveTypesError)" class="text-xs leading-relaxed text-(--status-danger-fg)">
+                        Sebagian pilihan filter gagal dimuat. Tekan Segarkan untuk mencoba lagi.
+                    </p>
+                </div>
+
+                <div v-if="activeError" role="alert" class="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-border bg-amber-100 dark:bg-amber-950/40 px-3 py-2 text-sm leading-relaxed text-amber-900 dark:text-amber-100">
+                    <span>Data {{ tabs[activeTab].label.toLowerCase() }} gagal dimuat. Angka dan ekspor belum tersedia.</span>
+                    <Button label="Coba lagi" severity="secondary" size="small" class="text-xs !min-h-11" :loading="activeLoading" @click="activeTab === 2 ? loadSummary() : loadData()" />
+                </div>
+
+                <TabPanels class="!px-0 !pb-0 mt-4">
+                    <TabPanel :value="0">
+                        <ReportLeaveHistoryTable data-tour="rep-table" :items="filteredLeaveReports" :loading="loading" :empty-text="emptyText" />
+                    </TabPanel>
+                    <TabPanel :value="1">
+                        <ReportBalanceTable data-tour="rep-table" :items="filteredBalanceReports" :loading="loading" :empty-text="emptyText" />
+                    </TabPanel>
+                    <TabPanel :value="2">
+                        <ReportLeaveTypeSummary data-tour="rep-table" :items="typeSummary" :loading="activeLoading" :empty-text="emptyText" :load-error="summaryError" />
+                    </TabPanel>
+                </TabPanels>
+            </Tabs>
         </div>
-
-        <ReportLeaveHistoryTable data-tour="rep-table"
-            v-if="activeTab === 0"
-            :items="filteredLeaveReports"
-            :loading="loading"
-        />
-
-        <ReportBalanceTable data-tour="rep-table"
-            v-else-if="activeTab === 1"
-            :items="filteredBalanceReports"
-            :loading="loading"
-        />
-
-        <ReportLeaveTypeSummary data-tour="rep-table"
-            v-else
-            :items="typeSummary"
-            :loading="loading"
-        />
     </div>
 </template>

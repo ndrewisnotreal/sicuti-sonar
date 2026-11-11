@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { CircleHelp } from 'lucide-vue-next';
+import { PhQuestion } from '@phosphor-icons/vue';
 import { currentUser } from '@/service/sicutiService';
 import { getTourPersona } from '@/tour/persona';
 import { tourById } from '@/tour/tours';
@@ -30,7 +30,7 @@ const tour = computed(() => {
         :title="tour.title"
         @click="startTour(tour)"
     >
-        <CircleHelp :size="15" :stroke-width="1.9" />
+        <PhQuestion :size="14" weight="bold" aria-hidden="true" />
         <span class="hidden sm:inline">{{ label }}</span>
     </Button>
 </template>

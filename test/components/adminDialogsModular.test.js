@@ -12,7 +12,10 @@ vi.mock('@/service/adminService', () => ({
         addTemplateMembers: vi.fn().mockResolvedValue([{ uid_user_system: 'USR-1', nama: 'Budi' }]),
         updateUser: vi.fn().mockResolvedValue({ success: true }),
         upsertLeaveType: vi.fn().mockResolvedValue({ success: true })
-    }
+    },
+    // AuditDetailDialog memakai label yang sama dengan tabel audit (audit-023 #7).
+    AUDIT_ACTION_LABEL: { APPROVE: 'Setujui' },
+    AUDIT_ENTITY_LABEL: {}
 }));
 
 import ApprovalTemplateDialog from '@/components/admin/ApprovalTemplateDialog.vue';
@@ -108,7 +111,11 @@ describe('ApprovalTemplateDialog', () => {
         });
         const saveBtn = w.findAllComponents(ButtonStub).find((b) => b.props('label') === 'Simpan Templat');
         await saveBtn.trigger('click');
-        expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ summary: 'Validasi', detail: 'Nama templat wajib diisi' }));
+        await flushPromises();
+        // Pesan di bawah field (audit-015 #5), bukan toast; data tidak dikirim.
+        expect(w.find('#tpl-name-error').text()).toBe('Nama templat wajib diisi.');
+        expect(toastAdd).not.toHaveBeenCalled();
+        expect(adminService.createApprovalTemplate).not.toHaveBeenCalled();
     });
 
     it('detects duplicate template name', async () => {
@@ -123,7 +130,9 @@ describe('ApprovalTemplateDialog', () => {
         });
         const saveBtn = w.findAllComponents(ButtonStub).find((b) => b.props('label') === 'Simpan Templat');
         await saveBtn.trigger('click');
-        expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ summary: 'Validasi', detail: 'Templat dengan nama "SIT Dev" sudah ada' }));
+        await flushPromises();
+        expect(w.find('#tpl-name-error').text()).toBe('Templat dengan nama "SIT Dev" sudah ada.');
+        expect(adminService.createApprovalTemplate).not.toHaveBeenCalled();
     });
 
     it('creates template successfully and emits saved', async () => {
@@ -156,7 +165,9 @@ describe('ApprovalFlowAddMemberDialog', () => {
         });
         const saveBtn = w.findAllComponents(ButtonStub).find((b) => b.props('label') === 'Simpan Anggota');
         await saveBtn.trigger('click');
-        expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ summary: 'Validasi', detail: 'Pilih minimal satu karyawan' }));
+        await flushPromises();
+        expect(w.find('#member-select-error').text()).toBe('Pilih minimal satu karyawan.');
+        expect(adminService.addTemplateMembers).not.toHaveBeenCalled();
     });
 });
 
@@ -201,7 +212,12 @@ describe('LeaveTypeFormDialog', () => {
         });
         const saveBtn = w.findAllComponents(ButtonStub).find((b) => b.props('label') === 'Simpan');
         await saveBtn.trigger('click');
-        expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ summary: 'Validasi', detail: 'Kode dan Nama jenis cuti wajib diisi' }));
+        await flushPromises();
+        // Kesalahan tampil di bawah field (audit-012 #2), tidak lagi lewat toast; data tidak dikirim.
+        expect(w.find('#lt-code-error').text()).toBe('Kode jenis cuti wajib diisi.');
+        expect(w.find('#lt-name-error').text()).toBe('Nama jenis cuti wajib diisi.');
+        expect(adminService.upsertLeaveType).not.toHaveBeenCalled();
+        expect(toastAdd).not.toHaveBeenCalled();
     });
 
     it('submits valid leave type and emits saved', async () => {

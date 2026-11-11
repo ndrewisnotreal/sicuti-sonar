@@ -3,74 +3,65 @@
         :visible="visible"
         modal
         header="Rincian Log Aktivitas"
-        :style="{ width: '500px', maxWidth: '95vw' }"
+        :style="{ width: '520px', maxWidth: '95vw' }"
         @update:visible="emit('update:visible', $event)"
     >
-        <div v-if="log" class="space-y-4 pt-2 text-xs">
-            <div class="grid grid-cols-2 gap-3 p-3 rounded-xl bg-surface-50 dark:bg-surface-800/60 border border-surface-200 dark:border-surface-700">
-                <div>
-                    <span class="text-muted-color block mb-0.5">Waktu Kejadian</span>
-                    <span class="font-semibold text-surface-900 dark:text-surface-100">
-                        {{ formattedTime }}
-                    </span>
+        <!-- Satu bingkai: daftar label/nilai tanpa kotak; label sama dengan tabel (audit-023 #7, #8). -->
+        <div v-if="log" class="space-y-4 pt-1 text-sm">
+            <dl class="divide-y divide-surface-200 dark:divide-surface-700">
+                <div class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-4 gap-y-0.5 py-2">
+                    <dt class="text-surface-600 dark:text-surface-400">Waktu</dt>
+                    <dd class="tabular-nums text-surface-900 dark:text-surface-100">{{ formattedTime }}</dd>
                 </div>
-                <div>
-                    <span class="text-muted-color block mb-0.5">IP Address</span>
-                    <span class="font-mono font-semibold text-surface-900 dark:text-surface-100">
-                        {{ log.ip_address || '-' }}
-                    </span>
+                <div class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-4 gap-y-0.5 py-2">
+                    <dt class="text-surface-600 dark:text-surface-400">Pengguna</dt>
+                    <dd class="text-surface-900 dark:text-surface-100">
+                        <span class="font-semibold">{{ auditUserName(log) }}</span>
+                        <span class="block text-xs text-surface-600 dark:text-surface-400">NIK {{ log.username || log.user || '-' }}<template v-if="log.user_role"> · {{ log.user_role }}</template></span>
+                    </dd>
                 </div>
-                <div>
-                    <span class="text-muted-color block mb-0.5">Pengguna</span>
-                    <span class="font-semibold text-surface-900 dark:text-surface-100">
-                        {{ log.username || log.user || '-' }}
-                    </span>
+                <div class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-4 gap-y-0.5 py-2">
+                    <dt class="text-surface-600 dark:text-surface-400">Aksi</dt>
+                    <dd class="text-surface-900 dark:text-surface-100">
+                        <Tag v-if="isAttentionAction(log.action)" :value="auditActionLabel(log.action)" severity="danger" />
+                        <span v-else>{{ auditActionLabel(log.action) }}</span>
+                        <span class="block font-mono text-xs text-surface-600 dark:text-surface-400">{{ log.action || '-' }}</span>
+                    </dd>
                 </div>
-                <div>
-                    <span class="text-muted-color block mb-0.5">Entitas Target</span>
-                    <span class="font-mono font-semibold text-surface-900 dark:text-surface-100">
-                        {{ log.entity || '-' }}
-                    </span>
+                <div class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-4 gap-y-0.5 py-2">
+                    <dt class="text-surface-600 dark:text-surface-400">Entitas</dt>
+                    <dd class="text-surface-900 dark:text-surface-100">
+                        {{ auditEntityLabel(log.entity) }}
+                        <span class="block font-mono text-xs text-surface-600 dark:text-surface-400 break-all">{{ log.entity || '-' }}</span>
+                    </dd>
                 </div>
-            </div>
+                <div class="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-4 gap-y-0.5 py-2">
+                    <dt class="text-surface-600 dark:text-surface-400">Alamat IP</dt>
+                    <dd class="font-mono text-surface-900 dark:text-surface-100 break-all">{{ log.ip_address || '-' }}</dd>
+                </div>
+            </dl>
 
             <div>
-                <span class="text-muted-color block mb-1 font-semibold">Tipe Aksi</span>
-                <Tag
-                    :value="log.action"
-                    :severity="getActionSeverity(log.action)"
-                    class="text-xs font-mono"
-                />
+                <h3 class="text-sm font-semibold text-surface-900 dark:text-surface-100 mb-1.5">Keterangan</h3>
+                <p class="px-3 py-2.5 rounded-border bg-surface-100 dark:bg-surface-800 text-surface-800 dark:text-surface-200 leading-relaxed whitespace-pre-wrap break-words">{{ log.details || log.description || '-' }}</p>
             </div>
 
-            <div>
-                <span class="text-muted-color block mb-1 font-semibold">Keterangan / Deskripsi Perubahan</span>
-                <div class="p-3 rounded-lg bg-surface-100 dark:bg-surface-800 text-surface-800 dark:text-surface-200 leading-relaxed font-mono text-[11px] whitespace-pre-wrap break-words">
-                    {{ log.details || log.description || '-' }}
-                </div>
-            </div>
-
-            <div v-if="log.payload" class="space-y-1">
-                <span class="text-muted-color block font-semibold">Payload Data (JSON)</span>
-                <pre class="p-3 rounded-lg bg-surface-950 text-emerald-400 font-mono text-[11px] overflow-x-auto max-h-48">{{ JSON.stringify(log.payload, null, 2) }}</pre>
-            </div>
-
-            <div class="flex justify-end pt-2">
-                <Button
-                    label="Tutup"
-                    severity="secondary"
-                    size="small"
-                    class="text-xs"
-                    @click="closeDialog"
-                />
+            <div v-if="log.payload">
+                <h3 class="text-sm font-semibold text-surface-900 dark:text-surface-100 mb-1.5">Data (JSON)</h3>
+                <pre class="px-3 py-2.5 rounded-border bg-surface-100 dark:bg-surface-800 text-surface-800 dark:text-surface-200 font-mono text-xs overflow-x-auto max-h-48">{{ JSON.stringify(log.payload, null, 2) }}</pre>
             </div>
         </div>
+
+        <template #footer>
+            <Button label="Tutup" severity="secondary" size="small" @click="closeDialog" />
+        </template>
     </Dialog>
 </template>
 
 <script setup>
 import { computed } from 'vue';
 import { formatDate } from '@/service/sicutiService';
+import { auditActionLabel, auditEntityLabel, auditUserName, isAttentionAction } from './auditLog';
 
 const props = defineProps({
     visible: {
@@ -89,16 +80,7 @@ function closeDialog() {
     emit('update:visible', false);
 }
 
-function getActionSeverity(action) {
-    if (!action) return 'secondary';
-    const a = action.toUpperCase();
-    if (a.includes('APPROVE') || a === 'LOGIN') return 'success';
-    if (a.includes('REJECT') || a.includes('DELETE') || a === 'LOCKOUT') return 'danger';
-    if (a.includes('CREATE') || a.includes('INSERT') || a.includes('SUBMIT')) return 'info';
-    if (a.includes('UPDATE') || a.includes('EDIT') || a.includes('RETURN') || a.includes('RESET')) return 'warn';
-    return 'secondary';
-}
-
+// Waktu sudah dikonversi service ke zona perangkat; label zona tidak dipaksakan (audit-023 #11).
 const formattedTime = computed(() => {
     if (!props.log) return '-';
     const raw = String(props.log.timestamp || props.log.created_at || '');
@@ -106,6 +88,6 @@ const formattedTime = computed(() => {
     const datePart = raw.split(/[ T]/)[0];
     const timePart = raw.split(/[ T]/)[1]?.slice(0, 8);
     const formattedDate = datePart ? formatDate(datePart) : '';
-    return timePart ? `${formattedDate}, ${timePart} WIB` : formattedDate;
+    return timePart ? `${formattedDate}, ${timePart}` : formattedDate;
 });
 </script>

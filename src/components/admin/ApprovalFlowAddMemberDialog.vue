@@ -23,8 +23,12 @@
                 emptyMessage="Tidak ada karyawan yang bisa ditambahkan"
                 emptyFilterMessage="Tidak ada karyawan yang cocok"
                 class="w-full text-xs"
+                :invalid="!!errors.members"
+                :aria-describedby="errors.members ? 'member-select-error' : undefined"
+                @update:modelValue="errors.members = ''"
             />
-            <p class="text-[11px] text-muted-color">
+            <p v-if="errors.members" id="member-select-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ errors.members }}</p>
+            <p class="text-xs text-muted-color">
                 Hanya karyawan dari departemen templat yang bisa dipilih. Satu karyawan hanya di satu templat: yang sudah ada di templat lain tidak bisa dipilih, keluarkan dulu dari templat itu. Approver sebaiknya tidak dimasukkan.
             </p>
         </div>
@@ -46,7 +50,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { nextTick, ref, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { adminService } from '@/service/adminService';
 
@@ -70,12 +74,14 @@ const toast = useToast();
 
 const selectedCandidateUids = ref([]);
 const saving = ref(false);
+const errors = ref({ members: '' });
 
 watch(
     () => props.visible,
     (isOpen) => {
         if (isOpen) {
             selectedCandidateUids.value = [];
+            errors.value = { members: '' };
         }
     }
 );
@@ -87,7 +93,9 @@ function closeDialog() {
 async function handleSave() {
     if (!props.template?.id_template) return;
     if (!selectedCandidateUids.value.length) {
-        toast.add({ severity: 'warn', summary: 'Validasi', detail: 'Pilih minimal satu karyawan', life: 3000 });
+        errors.value.members = 'Pilih minimal satu karyawan.';
+        await nextTick();
+        document.getElementById('member-select')?.focus();
         return;
     }
 

@@ -68,11 +68,18 @@ describe('ApprovalActionDialog', () => {
     it.each([
         ['Tolak', 'menolak'],
         ['Kembalikan', 'mengembalikan']
-    ])('%s tanpa catatan → toast "Catatan Diperlukan", tanpa konfirmasi', async (tombol, kata) => {
+    ])('%s tanpa catatan → pesan di field (bukan toast), tanpa konfirmasi (audit-029 #14)', async (tombol, kata) => {
         const { w } = mountDialog();
         await button(w, tombol).trigger('click');
-        expect(toastAdd).toHaveBeenCalledWith({ severity: 'error', summary: 'Catatan Diperlukan', detail: `Alasan/catatan wajib diisi saat ${kata} pengajuan cuti.`, life: 3500 });
+        expect(w.find('#approval-notes-error').text()).toBe(`Catatan wajib diisi saat ${kata} pengajuan cuti.`);
+        expect(toastAdd).not.toHaveBeenCalled();
         expect(lastConfirm).toBeNull();
+    });
+
+    it('konfirmasi keputusan berfokus awal di Batal (audit-029 #13)', async () => {
+        const { w } = mountDialog();
+        await button(w, 'Setujui Permohonan').trigger('click');
+        expect(lastConfirm.defaultFocus).toBe('reject');
     });
 
     it('Setujui: konfirmasi dulu; sesudah diterima → diproses sekali, toast sukses, dialog ditutup, antrean dimuat ulang', async () => {

@@ -1,5 +1,5 @@
 <script setup>
-import { Compass, MousePointerClick } from 'lucide-vue-next';
+import { PhCompass, PhCursorClick } from '@phosphor-icons/vue';
 import { useTour } from '@/tour/useTour';
 
 const emit = defineEmits(['select']);
@@ -17,7 +17,7 @@ const itemClass =
 <template>
     <button type="button" role="menuitem" :disabled="!pageTour" :class="itemClass" @click="run(startPageTour)">
         <div class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <MousePointerClick :size="16" />
+            <PhCursorClick :size="16" weight="bold" aria-hidden="true" />
         </div>
         <div class="flex flex-col min-w-0">
             <span class="text-xs font-semibold text-surface-800 dark:text-surface-100">Tur halaman ini</span>
@@ -26,7 +26,7 @@ const itemClass =
     </button>
     <button type="button" role="menuitem" :disabled="!introTour" :class="itemClass" @click="run(startIntro)">
         <div class="w-8 h-8 rounded-lg bg-surface-100 dark:bg-surface-800 text-surface-600 dark:text-surface-300 flex items-center justify-center shrink-0">
-            <Compass :size="16" />
+            <PhCompass :size="16" weight="bold" aria-hidden="true" />
         </div>
         <div class="flex flex-col min-w-0">
             <span class="text-xs font-semibold text-surface-800 dark:text-surface-100">Tur pengenalan</span>
