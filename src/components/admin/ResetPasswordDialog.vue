@@ -3,7 +3,7 @@ import { ref, computed, watch } from 'vue';
 import { adminService } from '@/service/adminService';
 import { useToast } from 'primevue/usetoast';
 import { passwordChecks, passwordProblem } from '@/utils/passwordRules';
-import { KeyRound, Check, X } from 'lucide-vue-next';
+import { PhCheck, PhX } from '@phosphor-icons/vue';
 
 const props = defineProps({
     visible: {
@@ -27,6 +27,7 @@ const errorMsg = ref('');
 const checks = computed(() => passwordChecks(newPassword.value));
 const isPasswordValid = computed(() => !passwordProblem(newPassword.value));
 const isMatch = computed(() => newPassword.value && newPassword.value === confirmPassword.value);
+const mismatch = computed(() => Boolean(confirmPassword.value) && !isMatch.value);
 
 watch(
     () => props.visible,
@@ -92,78 +93,57 @@ async function handleReset() {
         :visible="visible"
         modal
         header="Atur Ulang Kata Sandi"
-        :style="{ width: '420px' }"
+        :style="{ width: '440px' }"
         :breakpoints="{ '640px': '92vw' }"
         @update:visible="emit('update:visible', $event)"
     >
-        <div class="space-y-4 pt-1 text-xs">
-            <p class="text-surface-600 dark:text-surface-400">
-                Atur kata sandi baru untuk pengguna
-                <strong class="text-surface-900 dark:text-surface-100 font-semibold">
-                    {{ user?.nama || user?.username }}
-                </strong>
+        <div class="space-y-4 pt-1 text-sm">
+            <p class="text-surface-700 dark:text-surface-300">
+                Atur kata sandi baru untuk
+                <strong class="text-surface-900 dark:text-surface-100 font-semibold">{{ user?.nama || user?.username }}</strong>
                 ({{ user?.namecode || user?.username }}).
             </p>
 
-            <div class="space-y-1.5">
-                <label class="block font-medium text-surface-700 dark:text-surface-200">
-                    Kata Sandi Baru <span class="text-rose-500">*</span>
-                </label>
-                <InputText
-                    v-model="newPassword"
-                    type="password"
-                    class="w-full text-xs"
-                    placeholder="Masukkan kata sandi baru"
-                />
+            <!-- Label terhubung; syarat dan kesalahan dibacakan lewat aria-describedby (audit-024 #3). -->
+            <div>
+                <label for="reset-new" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Kata sandi baru <span class="text-(--status-danger-fg)" aria-hidden="true">*</span></label>
+                <InputText id="reset-new" v-model="newPassword" type="password" class="w-full" autocomplete="new-password" aria-required="true" aria-describedby="reset-rules" />
             </div>
 
-            <div class="space-y-1.5">
-                <label class="block font-medium text-surface-700 dark:text-surface-200">
-                    Konfirmasi Kata Sandi Baru <span class="text-rose-500">*</span>
-                </label>
+            <div>
+                <label for="reset-confirm" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Konfirmasi kata sandi baru <span class="text-(--status-danger-fg)" aria-hidden="true">*</span></label>
                 <InputText
+                    id="reset-confirm"
                     v-model="confirmPassword"
                     type="password"
-                    class="w-full text-xs"
-                    placeholder="Ulangi kata sandi baru"
+                    class="w-full"
+                    autocomplete="new-password"
+                    aria-required="true"
+                    :invalid="mismatch"
+                    :aria-invalid="mismatch"
+                    :aria-describedby="mismatch ? 'reset-mismatch' : undefined"
                 />
-                <p v-if="confirmPassword && !isMatch" class="text-rose-500 text-[11px]">
-                    Konfirmasi kata sandi tidak cocok.
-                </p>
+                <p v-if="mismatch" id="reset-mismatch" class="mt-1 text-xs text-(--status-danger-fg)">Konfirmasi kata sandi tidak cocok.</p>
             </div>
 
-            <div class="p-3 rounded-lg bg-surface-50 dark:bg-surface-800/50 border border-surface-200/60 dark:border-surface-700/60 space-y-1.5">
-                <div class="text-[11px] font-semibold text-surface-700 dark:text-surface-300">
-                    Syarat Keamanan Kata Sandi:
-                </div>
-                <div class="grid grid-cols-2 gap-1 text-[11px]">
-                    <div
-                        v-for="(c, idx) in checks"
-                        :key="idx"
-                        class="flex items-center gap-1.5"
-                        :class="c.ok ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-surface-400 dark:text-surface-500'"
-                    >
-                        <Check v-if="c.ok" :size="12" class="stroke-[3]" />
-                        <X v-else :size="12" />
-                        <span>{{ c.label }}</span>
-                    </div>
-                </div>
+            <!-- Daftar syarat tanpa kotak; warna netral dengan ikon, hijau hanya untuk syarat terpenuhi (audit-024 #4, #8). -->
+            <div id="reset-rules" aria-live="polite">
+                <p class="text-xs font-medium text-surface-700 dark:text-surface-300 mb-1">Syarat kata sandi</p>
+                <ul class="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                    <li v-for="c in checks" :key="c.label" class="flex items-center gap-1.5" :class="c.ok ? 'text-(--status-success-fg)' : 'text-surface-600 dark:text-surface-400'">
+                        <PhCheck v-if="c.ok" :size="14" weight="bold" aria-hidden="true" />
+                        <PhX v-else :size="14" weight="bold" aria-hidden="true" />
+                        <span>{{ c.label }}<span class="sr-only">{{ c.ok ? ': terpenuhi' : ': belum' }}</span></span>
+                    </li>
+                </ul>
             </div>
 
-            <div v-if="errorMsg" class="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 text-xs">
-                {{ errorMsg }}
-            </div>
+            <p v-if="errorMsg" role="alert" class="text-xs text-(--status-danger-fg)">{{ errorMsg }}</p>
         </div>
 
         <template #footer>
             <div class="flex justify-end gap-2 pt-2">
-                <Button
-                    label="Batal"
-                    severity="secondary"
-                    size="small"
-                    text
-                    @click="close"
-                />
+                <Button label="Batal" severity="secondary" size="small" text @click="close" />
                 <Button
                     label="Simpan Kata Sandi"
                     severity="primary"

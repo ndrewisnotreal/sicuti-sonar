@@ -12,21 +12,25 @@ import LeaveDetailDialog from '@/components/leave/LeaveDetailDialog.vue';
 import StatStrip from '@/components/common/StatStrip.vue';
 import DashboardMiniCalendar from '@/components/dashboard/DashboardMiniCalendar.vue';
 import {
-    Plus,
-    ArrowRight,
-    FolderOpen,
-    Eye,
-    CalendarCheck,
-    CalendarDays,
-    CalendarMinus,
-    History
-} from 'lucide-vue-next';
+    PhPlus,
+    PhFolderOpen,
+    PhEye,
+    PhCalendarCheck,
+    PhCalendarDots,
+    PhCalendarMinus,
+    PhClockCounterClockwise
+} from '@phosphor-icons/vue';
 
 const router = useRouter();
 
 const loading = ref(false);
 const balances = ref([]);
 const recentLeaves = ref([]);
+// Gagal muat tidak boleh tampil sebagai saldo 0 atau "belum ada pengajuan" (audit-036 #1).
+const balanceFailed = ref(false);
+const leavesFailed = ref(false);
+const loadedOnce = ref(false);
+const firstLoad = computed(() => loading.value && !loadedOnce.value);
 
 const selectedRequest = ref(null);
 const detailVisible = ref(false);
@@ -34,18 +38,9 @@ const detailVisible = ref(false);
 const todayDate = new Date();
 const balanceYear = todayDate.getFullYear();
 
+// Tanpa data saldo: null, bukan kuota 12 karangan (audit-036 #2).
 const activeBalance = computed(() => {
-    if (!balances.value.length) {
-        return {
-            remaining: 0,
-            annual_quota: 12,
-            used_days: 0,
-            carry_over_days: 0,
-            carry_over_expiry_date: null,
-            year: balanceYear,
-            period_label: ''
-        };
-    }
+    if (!balances.value.length) return null;
     const found = balances.value.find((b) => Number(b.year) === balanceYear) || balances.value[0];
     return {
         remaining: Number(found.remaining ?? (Number(found.annual_quota || 0) + Number(found.carry_over_days || 0) - Number(found.used_days || 0))),
@@ -60,6 +55,15 @@ const activeBalance = computed(() => {
 
 const statItems = computed(() => {
     const b = activeBalance.value;
+    if (!b) {
+        const hint = firstLoad.value ? 'Memuat…' : balanceFailed.value ? 'Saldo belum termuat' : 'Belum ada data saldo';
+        return [
+            { label: 'Saldo tersisa', value: '–', hint, accent: true, icon: PhCalendarCheck },
+            { label: 'Hak kuota tahunan', value: '–', hint, icon: PhCalendarDots },
+            { label: 'Cuti terpakai', value: '–', hint, icon: PhCalendarMinus },
+            { label: 'Carry over', value: '–', hint, icon: PhClockCounterClockwise }
+        ];
+    }
     return [
         {
             label: 'Saldo tersisa',
@@ -67,28 +71,28 @@ const statItems = computed(() => {
             unit: 'hari',
             hint: `dari ${b.annual_quota + b.carry_over_days} hari`,
             accent: true,
-            icon: CalendarCheck
+            icon: PhCalendarCheck
         },
         {
             label: 'Hak kuota tahunan',
             value: b.annual_quota,
             unit: 'hari',
             hint: `Periode ${b.period_label || b.year}`,
-            icon: CalendarDays
+            icon: PhCalendarDots
         },
         {
             label: 'Cuti terpakai',
             value: b.used_days,
             unit: 'hari',
             hint: 'Sudah disetujui',
-            icon: CalendarMinus
+            icon: PhCalendarMinus
         },
         {
             label: 'Carry over',
             value: b.carry_over_days,
             unit: 'hari',
             hint: b.carry_over_days > 0 && b.carry_over_expiry_date ? `Hangus ${formatDate(b.carry_over_expiry_date)}` : 'Tidak ada carry over',
-            icon: History
+            icon: PhClockCounterClockwise
         }
     ];
 });
@@ -100,18 +104,30 @@ const recentFiveLeaves = computed(() => {
 async function loadDashboardData() {
     loading.value = true;
     try {
-        const [balRes, leavesRes] = await Promise.all([
-            leaveService.getBalances({ year: balanceYear }).catch(() => []),
-            leaveService.getMyLeaves({ limit: 20 }).catch(() => [])
+        const [balRes, leavesRes] = await Promise.allSettled([
+            leaveService.getBalances({ year: balanceYear }),
+            leaveService.getMyLeaves({ limit: 20 })
         ]);
 
-        balances.value = Array.isArray(balRes) ? balRes : (balRes ? [balRes] : []);
-        recentLeaves.value = Array.isArray(leavesRes) ? leavesRes : [];
+        balanceFailed.value = balRes.status === 'rejected';
+        leavesFailed.value = leavesRes.status === 'rejected';
+        const bal = balRes.value;
+        balances.value = balanceFailed.value ? [] : Array.isArray(bal) ? bal : bal ? [bal] : [];
+        recentLeaves.value = !leavesFailed.value && Array.isArray(leavesRes.value) ? leavesRes.value : [];
     } catch (err) {
         console.error('Failed to load dashboard data:', err);
     } finally {
         loading.value = false;
+        loadedOnce.value = true;
     }
+}
+
+const requestId = (r) => r.id_request || r.id;
+const startOf = (r) => r.start_date || r.startDate;
+const endOf = (r) => r.end_date || r.endDate;
+function periodText(r) {
+    const s = formatDate(startOf(r));
+    return String(startOf(r)).slice(0, 10) === String(endOf(r)).slice(0, 10) ? s : `${s} – ${formatDate(endOf(r))}`;
 }
 
 onMounted(() => {
@@ -134,171 +150,117 @@ function viewDetail(request) {
 
 <template>
     <div class="space-y-6">
-        <StatStrip data-tour="dash-stats" :items="statItems" />
+        <div>
+            <h1 class="text-xl font-bold text-surface-900 dark:text-surface-100">Dashboard Karyawan</h1>
+            <p class="text-xs text-muted-color">Saldo dan riwayat pengajuan cuti Anda</p>
+        </div>
+
+        <div v-if="balanceFailed || leavesFailed" role="alert" class="flex flex-wrap items-center justify-between gap-2 rounded-border bg-amber-100 dark:bg-amber-950/40 px-3 py-2 text-sm leading-relaxed text-amber-900 dark:text-amber-100">
+            <span>{{ balanceFailed && leavesFailed ? 'Saldo dan riwayat pengajuan gagal dimuat.' : balanceFailed ? 'Saldo cuti gagal dimuat.' : 'Riwayat pengajuan gagal dimuat.' }}</span>
+            <Button label="Coba lagi" severity="secondary" size="small" class="text-xs !min-h-11 sm:!min-h-9" :loading="loading" @click="loadDashboardData" />
+        </div>
+        <p v-else-if="firstLoad" role="status" class="sr-only">Memuat dashboard…</p>
+
+        <StatStrip data-tour="dash-stats" :items="statItems" :aria-busy="firstLoad" />
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <div class="lg:col-span-8">
-                <div data-tour="dash-riwayat" class="bg-surface-0 dark:bg-surface-900 border border-surface-200/80 dark:border-surface-800 rounded-2xl p-5 sm:p-6 shadow-[0_1px_3px_rgba(0,0,0,0.03),0_6px_16px_rgba(0,0,0,0.02)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.03)]">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3.5 border-b border-surface-100 dark:border-surface-800">
+                <!-- .card tanpa border/shadow tambahan (00b §6.1, audit-036 #5). -->
+                <section data-tour="dash-riwayat" class="card !mb-0" aria-labelledby="dash-riwayat-title">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-surface-200 dark:border-surface-800">
                         <div>
-                            <h2 class="font-bold text-base text-surface-900 dark:text-surface-0 tracking-tight leading-tight">Riwayat Pengajuan</h2>
-                            <p class="text-xs text-surface-500 dark:text-surface-400 mt-0.5">Daftar permohonan cuti terbaru Anda</p>
+                            <h2 id="dash-riwayat-title" class="font-bold text-base text-surface-900 dark:text-surface-0 m-0">Riwayat Pengajuan</h2>
+                            <p class="text-xs text-muted-color mt-0.5">Lima pengajuan terbaru Anda</p>
                         </div>
                         <Button
                             v-if="can('pengajuan_cuti.submit')"
                             data-tour="dash-ajukan"
                             size="small"
-                            class="text-xs font-semibold flex items-center gap-1.5 shadow-sm active:scale-[0.97] transition-all duration-150 self-start sm:self-auto"
+                            class="text-xs font-semibold flex items-center justify-center gap-1.5 self-stretch sm:self-auto !min-h-11 sm:!min-h-9"
                             @click="startNewLeave"
                         >
-                            <Plus :size="14" :stroke-width="2" />
+                            <PhPlus :size="14" weight="bold" aria-hidden="true" />
                             <span>Ajukan Cuti</span>
                         </Button>
                     </div>
 
-                    <div class="hidden sm:block">
-                        <DataTable :value="recentFiveLeaves" :loading="loading" class="p-datatable-sm text-xs">
-                            <template #empty>
-                                <div class="text-center py-12 px-4">
-                                    <div class="w-12 h-12 rounded-2xl bg-surface-100 dark:bg-surface-800 flex items-center justify-center mx-auto mb-3 text-surface-400 dark:text-surface-500">
-                                        <FolderOpen :size="24" :stroke-width="1.75" />
-                                    </div>
-                                    <p class="font-semibold text-sm text-surface-900 dark:text-surface-100">Belum Ada Pengajuan Cuti</p>
-                                    <p class="text-xs text-surface-500 dark:text-surface-400 mt-1 max-w-xs mx-auto">Anda belum mengajukan cuti pada periode ini. Klik tombol di atas untuk membuat permohonan baru.</p>
-                                    <Button
-                                        v-if="can('pengajuan_cuti.submit')"
-                                        size="small"
-                                        class="mt-4 text-xs font-semibold inline-flex items-center gap-1.5 active:scale-[0.97] transition-all"
-                                        @click="startNewLeave"
-                                    >
-                                        <Plus :size="14" :stroke-width="2" />
-                                        <span>Ajukan Cuti Baru</span>
-                                    </Button>
-                                </div>
-                            </template>
-                            <Column header="No" style="width: 3.5rem">
-                                <template #body="{ index }">
-                                    <span class="text-surface-400 dark:text-surface-500 font-medium text-xs tabular-nums">{{ index + 1 }}</span>
-                                </template>
-                            </Column>
-                            <Column header="Diajukan">
-                                <template #body="{ data }">
-                                    <span class="text-xs text-surface-900 dark:text-surface-0 whitespace-nowrap tabular-nums">{{ formatDate(data.created_at || data.createdAt) }}</span>
-                                </template>
-                            </Column>
-                            <Column header="Jenis Cuti" style="min-width: 7.5rem">
-                                <template #body="{ data }">
-                                    <span class="font-medium text-xs text-surface-900 dark:text-surface-0 whitespace-nowrap">{{ data.nm_leave_type || data.leaveTypeName || data.kd_leave_type || '-' }}</span>
-                                </template>
-                            </Column>
-                            <Column header="Periode">
-                                <template #body="{ data }">
-                                    <span class="text-xs text-surface-600 dark:text-surface-300 whitespace-nowrap tabular-nums">
-                                        {{ formatDate(data.start_date || data.startDate) }} &ndash; {{ formatDate(data.end_date || data.endDate) }}
-                                    </span>
-                                </template>
-                            </Column>
-                            <Column header="Durasi" style="width: 5.5rem">
-                                <template #body="{ data }">
-                                    <span class="text-xs font-semibold text-surface-900 dark:text-surface-0 whitespace-nowrap tabular-nums" title="Sabtu, Minggu & libur nasional tidak dihitung">{{ data.total_days ?? data.totalDays ?? '-' }} hari kerja</span>
-                                </template>
-                            </Column>
-                            <Column header="Status" style="width: 7.5rem">
-                                <template #body="{ data }">
-                                    <Tag :value="getStatusLabel(data.status)" :severity="getStatusSeverity(data.status)" class="text-xs font-medium" />
-                                </template>
-                            </Column>
-
-                            <Column header="Aksi" style="width: 4rem" class="text-center">
-                                <template #body="{ data }">
-                                    <button
-                                        type="button"
-                                        class="w-8 h-8 rounded-lg flex items-center justify-center mx-auto text-surface-400 hover:text-primary hover:bg-primary/10 dark:hover:bg-primary/20 active:scale-90 transition-all cursor-pointer"
-                                        @click="viewDetail(data)"
-                                        :aria-label="`Lihat rincian pengajuan ${data.id_request || data.id}`"
-                                        title="Lihat Detail"
-                                    >
-                                        <Eye :size="16" :stroke-width="1.75" />
-                                    </button>
-                                </template>
-                            </Column>
-                        </DataTable>
+                    <p v-if="firstLoad" class="py-10 text-center text-xs text-muted-color">Memuat riwayat…</p>
+                    <p v-else-if="leavesFailed" class="py-10 text-center text-sm text-muted-color">Riwayat belum termuat.</p>
+                    <div v-else-if="!recentFiveLeaves.length" class="text-center py-10 px-4">
+                        <PhFolderOpen :size="32" weight="light" aria-hidden="true" class="text-muted-color mb-2 block mx-auto" />
+                        <p class="font-semibold text-sm text-surface-900 dark:text-surface-100">Belum ada pengajuan cuti</p>
+                        <!-- Satu ajakan saja: tombol Ajukan Cuti di judul kartu (audit-036 #8). -->
+                        <p class="text-xs text-muted-color mt-1 max-w-xs mx-auto">
+                            Anda belum pernah mengajukan cuti.<template v-if="can('pengajuan_cuti.submit')"> Gunakan tombol Ajukan Cuti untuk membuat permohonan.</template>
+                        </p>
                     </div>
 
-                    <div class="block sm:hidden space-y-3">
-                        <div v-if="!recentFiveLeaves.length && !loading" class="text-center py-8 px-4">
-                            <div class="w-12 h-12 rounded-2xl bg-surface-100 dark:bg-surface-800 flex items-center justify-center mx-auto mb-3 text-surface-400 dark:text-surface-500">
-                                <FolderOpen :size="24" :stroke-width="1.75" />
-                            </div>
-                            <p class="font-semibold text-sm text-surface-900 dark:text-surface-100">Belum Ada Pengajuan Cuti</p>
-                            <p class="text-xs text-surface-500 dark:text-surface-400 mt-1 max-w-xs mx-auto">Anda belum mengajukan cuti pada periode ini.</p>
-                            <Button
-                                v-if="can('pengajuan_cuti.submit')"
-                                size="small"
-                                class="mt-4 text-xs font-semibold inline-flex items-center gap-1.5 active:scale-[0.97] transition-all"
-                                @click="startNewLeave"
-                            >
-                                <Plus :size="14" :stroke-width="2" />
-                                <span>Ajukan Cuti Baru</span>
-                            </Button>
+                    <template v-else>
+                        <!-- Tabel mulai xl; di bawahnya daftar agar kolom Aksi tidak perlu digeser (pola item 19). -->
+                        <div class="hidden xl:block mt-1">
+                            <DataTable :value="recentFiveLeaves" :loading="loading" class="p-datatable-sm text-xs">
+                                <Column header="Diajukan">
+                                    <template #body="{ data }">
+                                        <span class="whitespace-nowrap tabular-nums text-surface-900 dark:text-surface-0">{{ formatDate(data.created_at || data.createdAt) }}</span>
+                                    </template>
+                                </Column>
+                                <Column header="Jenis Cuti" style="min-width: 7.5rem">
+                                    <template #body="{ data }">
+                                        <span class="font-medium whitespace-nowrap text-surface-900 dark:text-surface-0">{{ data.nm_leave_type || data.leaveTypeName || data.kd_leave_type || '-' }}</span>
+                                    </template>
+                                </Column>
+                                <Column header="Periode & Durasi">
+                                    <template #body="{ data }">
+                                        <div class="whitespace-nowrap tabular-nums">{{ periodText(data) }}</div>
+                                        <div class="text-muted-color"><span class="tabular-nums">{{ data.total_days ?? data.totalDays ?? '-' }}</span> hari kerja</div>
+                                    </template>
+                                </Column>
+                                <Column header="Status" style="width: 1%">
+                                    <template #body="{ data }">
+                                        <Tag :value="getStatusLabel(data.status)" :severity="getStatusSeverity(data.status)" class="text-xs font-medium whitespace-nowrap" />
+                                    </template>
+                                </Column>
+                                <Column header="Aksi" style="width: 1%" :pt="{ headerCell: { class: 'text-right' }, bodyCell: { class: 'text-right' } }">
+                                    <template #body="{ data }">
+                                        <button
+                                            type="button"
+                                            class="inline-flex items-center justify-center min-w-9 min-h-9 rounded-border text-surface-600 dark:text-surface-300 hover:text-primary hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors motion-reduce:transition-none cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                                            :aria-label="`Detail ${requestId(data)}`"
+                                            title="Detail"
+                                            @click="viewDetail(data)"
+                                        >
+                                            <PhEye :size="16" weight="bold" aria-hidden="true" />
+                                        </button>
+                                    </template>
+                                </Column>
+                            </DataTable>
                         </div>
 
-                        <div
-                            v-for="item in recentFiveLeaves"
-                            :key="item.id_request || item.id"
-                            class="p-3.5 rounded-xl border border-surface-200/80 dark:border-surface-800 bg-surface-50/50 dark:bg-surface-800/40 space-y-2.5"
-                        >
-                            <div class="flex items-start justify-between gap-2">
-                                <div>
-                                    <span class="text-xs font-semibold text-surface-900 dark:text-surface-0 block">
-                                        {{ item.nm_leave_type || item.leaveTypeName || item.kd_leave_type || 'Cuti' }}
-                                    </span>
-                                    <span class="text-[11px] font-mono text-muted-color">
-                                        #{{ item.id_request || item.id }}
-                                    </span>
+                        <ul class="block xl:hidden divide-y divide-surface-200 dark:divide-surface-700" :class="{ 'opacity-60': loading }">
+                            <li v-for="item in recentFiveLeaves" :key="requestId(item)" class="py-3 flex items-start justify-between gap-3 text-xs">
+                                <div class="min-w-0 space-y-0.5">
+                                    <div class="font-semibold text-sm text-surface-900 dark:text-surface-100">{{ item.nm_leave_type || item.leaveTypeName || item.kd_leave_type || 'Cuti' }}</div>
+                                    <div class="text-surface-800 dark:text-surface-200 tabular-nums">{{ periodText(item) }} · {{ item.total_days ?? item.totalDays ?? '-' }} hari kerja</div>
+                                    <div class="font-mono text-muted-color break-all">{{ requestId(item) }}</div>
+                                    <Tag :value="getStatusLabel(item.status)" :severity="getStatusSeverity(item.status)" class="text-xs font-medium mt-1" />
                                 </div>
-                                <Tag :value="getStatusLabel(item.status)" :severity="getStatusSeverity(item.status)" class="text-xs font-medium" />
-                            </div>
-                            <div class="text-xs text-surface-600 dark:text-surface-300 space-y-1">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-muted-color">Periode:</span>
-                                    <span class="font-medium tabular-nums text-surface-800 dark:text-surface-200">
-                                        {{ formatDate(item.start_date || item.startDate) }} &ndash; {{ formatDate(item.end_date || item.endDate) }}
-                                    </span>
-                                </div>
-                                <div class="flex items-center justify-between">
-                                    <span class="text-muted-color">Durasi:</span>
-                                    <span class="font-semibold text-surface-900 dark:text-surface-100 tabular-nums">
-                                        {{ item.total_days ?? item.totalDays ?? '-' }} hari kerja
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="pt-2 border-t border-surface-200/60 dark:border-surface-700/60 flex justify-end">
-                                <Button
-                                    size="small"
-                                    severity="secondary"
-                                    outlined
-                                    class="text-xs font-medium py-1 px-2.5 flex items-center gap-1.5"
-                                    @click="viewDetail(item)"
-                                >
-                                    <Eye :size="13" />
-                                    <span>Lihat Detail</span>
+                                <Button severity="secondary" outlined size="small" class="text-xs shrink-0 !min-h-11 flex items-center gap-1.5" :aria-label="`Detail ${requestId(item)}`" @click="viewDetail(item)">
+                                    <PhEye :size="14" weight="bold" aria-hidden="true" />
+                                    <span>Detail</span>
                                 </Button>
-                            </div>
-                        </div>
-                    </div>
+                            </li>
+                        </ul>
+                    </template>
 
-                    <div class="mt-4 pt-3.5 border-t border-surface-100 dark:border-surface-800 text-center">
-                        <button
-                            type="button"
-                            class="group text-xs text-primary font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
-                            @click="$router.push('/leave/history')"
+                    <div class="mt-3 pt-3 border-t border-surface-200 dark:border-surface-800 text-center">
+                        <router-link
+                            to="/leave/history"
+                            class="inline-flex items-center min-h-11 sm:min-h-9 px-3 rounded-border text-xs font-semibold text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                         >
-                            <span>Lihat Seluruh Riwayat Cuti</span>
-                            <ArrowRight :size="13" :stroke-width="2" class="group-hover:translate-x-0.5 transition-transform duration-150" />
-                        </button>
+                            Lihat seluruh riwayat cuti
+                        </router-link>
                     </div>
-                </div>
+                </section>
             </div>
 
             <div class="lg:col-span-4">

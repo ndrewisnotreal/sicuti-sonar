@@ -33,7 +33,7 @@ export const TOUR_STEPS = {
         {
             element: 'admin-stats',
             title: 'Ringkasan divisi',
-            text: 'Angka utama cuti divisi Anda tahun ini.'
+            text: 'Angka utama cuti divisi Anda: karyawan aktif, pengajuan, dan hari libur tahun ini.'
         },
         {
             element: 'admin-calendar',
@@ -232,7 +232,7 @@ export const TOUR_STEPS = {
         {
             element: 'flow-levels',
             title: 'Tingkat approval',
-            text: 'Urutan pemberi persetujuan; setiap tingkat diisi satu peran. Tahan ikon ≡ lalu geser untuk mengubah urutan.'
+            text: 'Urutan pemberi persetujuan; setiap tingkat diisi satu peran. Geser ikon ≡ atau pakai tombol naik/turun untuk mengubah urutan.'
         },
         {
             element: 'flow-add-level',
@@ -254,7 +254,7 @@ export const TOUR_STEPS = {
         {
             element: 'rep-filters',
             title: 'Filter',
-            text: 'Tahun, rentang tanggal, jenis cuti, status, dan pencarian. Filter ini ikut terbawa saat ekspor.'
+            text: 'Tahun, rentang tanggal, jenis cuti, status, dan pencarian. Filter yang terlihat di tab ini ikut terbawa saat ekspor.'
         },
         {
             element: 'rep-table',
@@ -268,8 +268,8 @@ export const TOUR_STEPS = {
         },
         {
             element: 'export-excel',
-            title: 'Ekspor Excel',
-            text: 'Unduh tab yang sedang dibuka beserta filternya. Tanggal dan angka bisa langsung diolah di Excel.'
+            title: 'Ekspor CSV',
+            text: 'Unduh tab yang sedang dibuka beserta filter yang terlihat, dalam format CSV yang bisa dibuka di Excel.'
         }
     ],
     'admin.audit': [
@@ -293,12 +293,12 @@ export const TOUR_STEPS = {
         {
             element: 'audit-col-detail',
             title: 'Detail perubahan',
-            text: 'Ringkasan perubahan. Klik ikon mata untuk melihat isi lengkapnya.'
+            text: 'Ringkasan perubahan. Tekan tombol detail untuk melihat isi lengkapnya.'
         },
         {
             element: 'export-excel',
-            title: 'Ekspor Excel',
-            text: 'Unduh seluruh log sesuai filter, bukan hanya yang tampil di tabel.'
+            title: 'Ekspor CSV',
+            text: 'Unduh log yang sudah dimuat sesuai filter (paling banyak 500 entri terbaru) sebagai CSV yang bisa dibuka di Excel.'
         }
     ]
 };

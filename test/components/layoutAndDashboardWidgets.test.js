@@ -192,6 +192,70 @@ describe('AdminDashboardMonitoringTable', () => {
         expect(w.emitted('view-detail')).toBeTruthy();
         expect(w.emitted('view-detail')[0][0]).toEqual(sampleRequests[0]);
     });
+
+    it('membedakan gagal dimuat dari tidak cocok filter, dan Atur ulang filter mengembalikan data (audit-018 #2)', async () => {
+        const failed = mount(AdminDashboardMonitoringTable, {
+            props: { requests: [], loading: false, adminDivision: '', loadError: true },
+            global: { stubs: globalStubs }
+        });
+        expect(failed.text()).toContain('Data pengajuan belum termuat.');
+        expect(failed.text()).toContain('Menampilkan – pengajuan');
+
+        const w = mount(AdminDashboardMonitoringTable, {
+            props: { requests: sampleRequests, loading: false, adminDivision: '' },
+            global: { stubs: globalStubs }
+        });
+        w.vm.searchQuery = 'tidak-ada';
+        await w.vm.$nextTick();
+        expect(w.text()).toContain('Tidak ada pengajuan yang cocok dengan filter.');
+        w.vm.resetFilters();
+        await w.vm.$nextTick();
+        expect(w.text()).toContain('Menampilkan 2 pengajuan');
+    });
+
+    it('baris status menghitung per status mengikuti filter lain, dan memilih status menyaring tabel (audit-019 #2)', async () => {
+        const w = mount(AdminDashboardMonitoringTable, {
+            props: { requests: sampleRequests, loading: false, adminDivision: '' },
+            global: { stubs: globalStubs }
+        });
+        const chips = () => w.findAll('[role="group"] button').map((b) => b.text().replace(/\s+/g, ' '));
+        expect(chips()).toEqual(['Semua 2', 'Diajukan 1', 'Disetujui 1']);
+        await w.findAll('[role="group"] button')[2].trigger('click');
+        expect(w.text()).toContain('Menampilkan 1 pengajuan');
+        expect(w.findAll('[role="group"] button')[2].attributes('aria-pressed')).toBe('true');
+        w.vm.searchQuery = 'Dewi';
+        await w.vm.$nextTick();
+        // Status terpilih tetap tampil walau jumlahnya 0 setelah filter lain berubah.
+        expect(chips()).toEqual(['Semua 1', 'Diajukan 1', 'Disetujui 0']);
+    });
+
+    it('data terakhir tetap dihitung dan tanggal pengajuan tersedia pada daftar HP', async () => {
+        const w = mount(AdminDashboardMonitoringTable, {
+            props: { requests: sampleRequests, loadError: true, staleData: true },
+            global: { stubs: globalStubs }
+        });
+        expect(w.get('[role="status"]').text()).toContain('Menampilkan 2 pengajuan · data terakhir');
+        expect(w.findAll('li')[0].text()).toContain('Diajukan');
+        expect(w.findAll('li')[0].text()).toContain('20 Mei 2025');
+        w.vm.searchQuery = 'tidak-ada';
+        await w.vm.$nextTick();
+        expect(w.text()).toContain('Tidak ada pengajuan yang cocok dengan filter.');
+        expect(w.get('[role="status"]').text()).toContain('Menampilkan 0 pengajuan · data terakhir');
+    });
+
+    it('kegagalan sumber filter ditunjukkan per field, retry mengirim refresh', async () => {
+        const w = mount(AdminDashboardMonitoringTable, {
+            props: { isSuper: true, leaveTypesError: true, departmentsError: true },
+            global: { stubs: globalStubs }
+        });
+        expect(w.get('#mon-dept-error').text()).toContain('divisi gagal dimuat');
+        expect(w.get('#mon-type-error').text()).toContain('jenis cuti gagal dimuat');
+        expect(w.get('[role="alert"]').text()).toContain('filter lain masih dapat digunakan');
+        const selects = w.findAllComponents(SelectStub);
+        expect(selects.every((s) => s.attributes('disabled') !== undefined)).toBe(true);
+        await w.findAll('button').find((b) => b.text() === 'Coba lagi filter').trigger('click');
+        expect(w.emitted('refresh')).toHaveLength(1);
+    });
 });
 
 describe('AdminDashboardCalendar', () => {

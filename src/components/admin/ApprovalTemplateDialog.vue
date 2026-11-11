@@ -9,18 +9,25 @@
     >
         <div class="space-y-3.5 pt-2 text-xs">
             <div>
-                <label class="block font-medium mb-1">Nama Templat *</label>
+                <label for="tpl-name" class="block font-medium mb-1">Nama Templat *</label>
                 <InputText
+                    id="tpl-name"
                     v-model="form.nm_template"
                     class="w-full text-xs"
                     placeholder="Contoh: SIT Developer"
+                    :invalid="!!errors.name"
+                    :aria-invalid="!!errors.name"
+                    :aria-describedby="errors.name ? 'tpl-name-error' : undefined"
+                    @update:modelValue="errors.name = ''"
                 />
+                <p v-if="errors.name" id="tpl-name-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ errors.name }}</p>
             </div>
 
             <div>
-                <label class="block font-medium mb-1">Departemen</label>
+                <label id="tpl-dept-label" class="block font-medium mb-1">Departemen</label>
                 <Select
                     v-model="form.kd_dept"
+                    ariaLabelledby="tpl-dept-label"
                     :options="[{ kd_dept: null, nm_dept: 'Semua Departemen' }, ...departments]"
                     optionLabel="nm_dept"
                     optionValue="kd_dept"
@@ -28,7 +35,7 @@
                     placeholder="Pilih Departemen"
                     class="w-full text-xs"
                 />
-                <p class="text-[11px] text-muted-color mt-1">
+                <p class="text-xs text-muted-color mt-1">
                     Menentukan Admin Seksi mana yang melihat templat ini. Karyawan dimasukkan lewat kartu Anggota.
                 </p>
             </div>
@@ -59,7 +66,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { nextTick, ref, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { adminService } from '@/service/adminService';
 
@@ -101,6 +108,8 @@ const form = ref({
 });
 
 const saving = ref(false);
+// Validasi tampil di bawah field (audit-015 #5); syaratnya tetap.
+const errors = ref({ name: '' });
 
 watch(
     () => props.templateData,
@@ -112,10 +121,17 @@ watch(
                 nm_template: newVal.nm_template || '',
                 is_active: newVal.is_active ?? true
             };
+            errors.value = { name: '' };
         }
     },
     { immediate: true, deep: true }
 );
+
+async function showNameError(message) {
+    errors.value.name = message;
+    await nextTick();
+    document.getElementById('tpl-name')?.focus();
+}
 
 function closeDialog() {
     emit('update:visible', false);
@@ -124,16 +140,14 @@ function closeDialog() {
 async function handleSave() {
     const nameTrimmed = form.value.nm_template?.trim();
     if (!nameTrimmed) {
-        toast.add({ severity: 'warn', summary: 'Validasi', detail: 'Nama templat wajib diisi', life: 3000 });
-        return;
+        return showNameError('Nama templat wajib diisi.');
     }
 
     const dupName = props.templates.find(
         (t) => t.id_template !== form.value.id_template && t.nm_template?.trim().toLowerCase() === nameTrimmed.toLowerCase()
     );
     if (dupName) {
-        toast.add({ severity: 'warn', summary: 'Validasi', detail: `Templat dengan nama "${nameTrimmed}" sudah ada`, life: 3000 });
-        return;
+        return showNameError(`Templat dengan nama "${nameTrimmed}" sudah ada.`);
     }
 
     saving.value = true;
@@ -149,7 +163,7 @@ async function handleSave() {
         emit('saved', savedResult);
         closeDialog();
     } catch (err) {
-        toast.add({ severity: 'error', summary: 'Gagal', detail: err.message || 'Gagal menyimpan template', life: 3000 });
+        toast.add({ severity: 'error', summary: 'Gagal', detail: err.message || 'Gagal menyimpan templat', life: 3000 });
     } finally {
         saving.value = false;
     }

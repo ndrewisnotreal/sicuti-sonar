@@ -3,11 +3,9 @@ import { publicPath } from '@/utils/publicPath';
 import { computed, ref, watch } from 'vue';
 import { leaveService } from '@/service/leaveService';
 import {
-    currentUser,
     getStatusSeverity,
     getStatusLabel,
     formatDate,
-    formatDateTime,
     can,
     attachmentInfo,
     documentPending,
@@ -17,16 +15,14 @@ import LeaveAttachment from '@/components/leave/LeaveAttachment.vue';
 import LeaveApprovalTimeline from '@/components/leave/LeaveApprovalTimeline.vue';
 import TourHelpButton from '@/components/common/TourHelpButton.vue';
 import { useToast } from 'primevue/usetoast';
+import { localIsoDate } from '@/utils/onLeaveToday';
 import { buildLeaveFormHtml, validationUrl, isQrReachableFromPhone } from '@/utils/leaveFormPrint';
 import {
-    FileText,
-    Printer,
-    Copy,
-    Calendar,
-    ArrowRight,
-    RotateCcw,
-    ShieldCheck
-} from 'lucide-vue-next';
+    PhPrinter,
+    PhCopy,
+    PhArrowUUpLeft,
+    PhSealCheck
+} from '@phosphor-icons/vue';
 
 const props = defineProps({
     visible: Boolean,
@@ -41,6 +37,7 @@ const emit = defineEmits(['update:visible', 'refresh', 'edit', 'process']);
 const toast = useToast();
 
 const loading = ref(false);
+const loadError = ref(false);
 const detailData = ref(null);
 
 watch(
@@ -48,6 +45,7 @@ watch(
     async ([visible, req]) => {
         if (visible && req) {
             detailData.value = { ...req };
+            loadError.value = false;
             const reqId = req.id_request || req.id;
             if (reqId) {
                 loading.value = true;
@@ -58,6 +56,7 @@ watch(
                     }
                 } catch (err) {
                     console.error('Failed to fetch full leave detail:', err);
+                    loadError.value = true;
                 } finally {
                     loading.value = false;
                 }
@@ -132,20 +131,26 @@ const stepsList = computed(() => {
     return [];
 });
 
+// Pengajuan yang sudah final tidak lagi menunggu dokumen; tenggat yang lewat ditandai, bukan diam-diam ditampilkan.
+const FINAL_STATUSES = ['rejected', 'cancelled'];
+const isFinal = computed(() => FINAL_STATUSES.includes(status.value));
+const docPending = computed(() => documentPending(fullRequest.value));
+const docOverdue = computed(() => docPending.value && String(fullRequest.value.document_due_date).slice(0, 10) < localIsoDate());
+
 function copyTicketId(id) {
     if (!id) return;
     navigator.clipboard?.writeText(id).then(() => {
         toast.add({
             severity: 'info',
             summary: 'Tersalin',
-            detail: `Nomor ID #${id} disalin ke papan klip`,
+            detail: `Nomor pengajuan ${id} disalin ke papan klip`,
             life: 2500
         });
     }).catch(() => {
         toast.add({
             severity: 'info',
-            summary: 'Nomor ID',
-            detail: `#${id}`,
+            summary: 'Nomor pengajuan',
+            detail: id,
             life: 2000
         });
     });
@@ -222,148 +227,169 @@ async function printDocument() {
 </script>
 
 <template>
-    <Dialog
+    <Drawer
         :visible="visible"
         @update:visible="emit('update:visible', $event)"
-        modal
-        :breakpoints="{ '960px': '85vw', '640px': '95vw' }"
-        :style="{ width: '680px' }"
-        :contentStyle="{ maxHeight: 'calc(100vh - 12rem)', overflowY: 'auto' }"
-        :closable="true"
-        dismissableMask
+        position="right"
+        class="leave-detail-panel !w-full sm:!w-[38rem] !max-w-full"
+        :pt="{
+            root: { 'aria-labelledby': 'leave-detail-title' },
+            header: { class: '!px-5 sm:!px-7 !py-4 [@media(max-height:500px)]:!py-2 !gap-3 border-b border-surface-200 dark:border-surface-800' },
+            content: { class: '!p-0' },
+            pcCloseButton: { root: { class: '!w-11 !h-11 !rounded-border shrink-0', 'aria-label': 'Tutup detail' } },
+            footer: { class: '!px-5 sm:!px-7 !py-4 [@media(max-height:500px)]:!py-2 border-t border-surface-200 dark:border-surface-800 bg-surface-0 dark:bg-surface-900' }
+        }"
     >
         <template #header>
-            <div class="flex items-center gap-2.5">
-                <span class="text-base font-bold text-surface-900 dark:text-surface-100">
-                    Detail Permohonan Cuti
-                </span>
+            <div class="min-w-0 flex-1">
+                <h2 id="leave-detail-title" class="text-base font-semibold leading-snug text-surface-900 dark:text-surface-100">
+                    Detail pengajuan cuti
+                </h2>
                 <button
                     v-if="ticketId"
                     type="button"
-                    class="inline-flex items-center gap-1 font-mono text-xs font-semibold text-primary bg-primary-50 dark:bg-primary-950/40 hover:bg-primary-100 dark:hover:bg-primary-900/50 border border-primary/20 px-2 py-0.5 rounded-md transition-all cursor-pointer active:scale-95"
+                    class="mt-0.5 -ml-1 inline-flex max-w-full min-h-8 items-center gap-2 rounded px-1 text-xs text-surface-600 dark:text-surface-400 hover:text-primary dark:hover:text-primary-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-colors cursor-pointer"
                     @click="copyTicketId(ticketId)"
-                    title="Salin ID Tiket"
+                    title="Salin nomor pengajuan"
+                    :aria-label="`Salin nomor pengajuan ${ticketId}`"
                 >
-                    <span>#{{ ticketId }}</span>
-                    <Copy :size="11" :stroke-width="1.8" />
+                    <span class="break-all text-left tabular-nums">{{ ticketId }}</span>
+                    <PhCopy :size="14" weight="bold" class="shrink-0" aria-hidden="true" />
                 </button>
+                <span v-if="loading" role="status" class="ml-2 text-xs text-surface-600 dark:text-surface-400">Memuat detail terbaru…</span>
             </div>
         </template>
 
-        <div v-if="fullRequest" class="space-y-4 pt-1">
-            <div data-tour="detail-summary" class="p-3 px-3.5 bg-surface-50 dark:bg-surface-800/80 rounded-xl border border-surface-200/80 dark:border-surface-700/80 flex items-center justify-between gap-3 shadow-2xs">
-                <div class="flex items-center gap-3 min-w-0">
-                    <div class="w-8 h-8 rounded-lg bg-primary/10 dark:bg-primary/20 text-primary flex items-center justify-center font-bold text-xs select-none shrink-0">
-                        {{ requesterName.charAt(0) }}
+        <div v-if="fullRequest" class="px-5 py-6 sm:px-7" :aria-busy="loading">
+            <p v-if="!loading && loadError" role="alert" class="mb-5 rounded-border bg-amber-100 dark:bg-amber-950/40 px-3 py-2 text-sm leading-relaxed text-amber-900 dark:text-amber-100">
+                Detail terbaru gagal dimuat. Data yang tampil berasal dari daftar dan mungkin belum lengkap. Tutup lalu buka lagi untuk mencoba ulang.
+            </p>
+            <section data-tour="detail-summary">
+                <div class="flex items-start justify-between gap-4">
+                    <h3 class="min-w-0 text-2xl font-semibold leading-tight tracking-tight text-surface-900 dark:text-surface-0 break-words">
+                        {{ leaveTypeName }}
+                    </h3>
+                    <Tag :value="getStatusLabel(status)" :severity="getStatusSeverity(status)" class="mt-1 shrink-0 !text-xs !font-medium" />
+                </div>
+
+                <div class="mt-5 grid grid-cols-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-x-4 gap-y-3 rounded-border bg-surface-100 dark:bg-surface-950/50 p-4">
+                    <div class="min-w-0">
+                        <p class="text-sm text-surface-600 dark:text-surface-400">Mulai cuti</p>
+                        <p class="mt-1.5 text-sm font-semibold leading-relaxed text-surface-900 dark:text-surface-100">{{ formatDate(startDate) }}</p>
                     </div>
                     <div class="min-w-0">
-                        <h4 class="font-bold text-sm text-surface-900 dark:text-surface-0 leading-tight truncate">
-                            {{ requesterName }}
-                        </h4>
-                        <p class="text-[11px] text-muted-color mt-0.5 truncate">
-                            NIK: {{ requesterNik }} &bull; Divisi: {{ requesterDept }}
+                        <p class="text-sm text-surface-600 dark:text-surface-400">Selesai cuti</p>
+                        <p class="mt-1.5 text-sm font-semibold leading-relaxed text-surface-900 dark:text-surface-100">{{ formatDate(endDate) }}</p>
+                    </div>
+                    <div class="col-span-2 flex items-baseline justify-between gap-3 border-t border-surface-300 pt-3 dark:border-surface-700 sm:col-span-1 sm:block sm:border-t-0 sm:border-l sm:pt-0 sm:pl-4">
+                        <p class="text-sm text-surface-600 dark:text-surface-400">Durasi</p>
+                        <p class="sm:mt-1 flex items-baseline gap-1.5 whitespace-nowrap">
+                            <span class="text-xl font-semibold tabular-nums text-surface-900 dark:text-surface-100">{{ totalDays }}</span>
+                            <span class="text-xs text-surface-600 dark:text-surface-400">hari kerja</span>
                         </p>
                     </div>
                 </div>
-                <div class="shrink-0 flex items-center gap-2">
-                    <Tag
-                        :value="getStatusLabel(status)"
-                        :severity="getStatusSeverity(status)"
-                        class="text-[11px] font-semibold !rounded-full !px-2.5 !py-0.5"
-                    />
-                </div>
-            </div>
 
-            <div class="rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900 p-4 space-y-3">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-3 border-b border-surface-100 dark:border-surface-800 text-xs">
-                    <div>
-                        <span class="text-muted-color block mb-1">Jenis Cuti</span>
-                        <span class="font-bold text-surface-900 dark:text-surface-0 text-sm">
-                            {{ leaveTypeName }}
-                        </span>
-                    </div>
-                    <div>
-                        <span class="text-muted-color block mb-1">Durasi Hari Kerja</span>
-                        <span class="font-bold text-primary text-sm">
-                            {{ totalDays }} Hari Kerja
-                        </span>
-                    </div>
-                    <div class="sm:col-span-2">
-                        <span class="text-muted-color block mb-1">Rentang Tanggal Pelaksanaan</span>
-                        <div class="flex items-center gap-2 font-medium text-surface-800 dark:text-surface-200">
-                            <Calendar :size="14" class="text-primary" />
-                            <span>{{ formatDate(startDate) }}</span>
-                            <ArrowRight :size="13" class="text-muted-color" />
-                            <span>{{ formatDate(endDate) }}</span>
-                        </div>
-                    </div>
-                </div>
+            </section>
 
-                <div class="text-xs">
-                    <span class="text-muted-color block mb-1">Alasan Permohonan Cuti</span>
-                    <p class="text-surface-800 dark:text-surface-200 leading-relaxed bg-surface-50 dark:bg-surface-800 p-3 rounded-lg border border-surface-200/60 dark:border-surface-700/60">
-                        {{ reason }}
-                    </p>
-                </div>
+            <!-- Satu pola label/nilai di seluruh panel: label kiri 9rem mulai layar sm, label di atas nilai di mobile. -->
+            <section class="mt-6 border-t border-surface-200 pt-6 dark:border-surface-800">
+                <h3 class="text-sm font-semibold text-surface-900 dark:text-surface-100">Pemohon</h3>
+                <dl class="mt-3 grid grid-cols-1 sm:grid-cols-[9rem_minmax(0,1fr)] gap-x-4 gap-y-1 sm:gap-y-3 text-sm leading-relaxed [&>dt:not(:first-child)]:mt-2 sm:[&>dt:not(:first-child)]:mt-0">
+                    <dt class="text-surface-600 dark:text-surface-400">Nama</dt>
+                    <dd class="min-w-0 break-words font-semibold text-surface-900 dark:text-surface-100">{{ requesterName }}</dd>
+                    <dt class="text-surface-600 dark:text-surface-400">NIK</dt>
+                    <dd class="min-w-0 break-words text-surface-800 dark:text-surface-200 tabular-nums">{{ requesterNik }}</dd>
+                    <dt class="text-surface-600 dark:text-surface-400">Divisi</dt>
+                    <dd class="min-w-0 break-words text-surface-800 dark:text-surface-200">{{ requesterDept }}</dd>
+                    <template v-if="fullRequest.created_at">
+                        <dt class="text-surface-600 dark:text-surface-400">Tanggal pengajuan</dt>
+                        <dd class="min-w-0 break-words text-surface-800 dark:text-surface-200">{{ formatDate(fullRequest.created_at) }}</dd>
+                    </template>
+                </dl>
+            </section>
 
-                <div v-if="attachment || documentPending(fullRequest)" data-tour="detail-attachment" class="text-xs pt-1">
-                    <span class="text-muted-color block mb-1">Dokumen Pendukung</span>
-                    <LeaveAttachment :request="fullRequest" />
-                </div>
-            </div>
+            <section class="mt-6 border-t border-surface-200 pt-6 dark:border-surface-800">
+                <h3 class="text-sm font-semibold text-surface-900 dark:text-surface-100">Rincian</h3>
+                <dl class="mt-3 grid grid-cols-1 sm:grid-cols-[9rem_minmax(0,1fr)] gap-x-4 gap-y-1 sm:gap-y-3 text-sm leading-relaxed [&>dt:not(:first-child)]:mt-2 sm:[&>dt:not(:first-child)]:mt-0">
+                    <dt class="text-surface-600 dark:text-surface-400">Alasan cuti</dt>
+                    <dd class="min-w-0 break-words text-surface-800 dark:text-surface-200 whitespace-pre-line">{{ reason }}</dd>
+                    <template v-if="fullRequest.substitute_name">
+                        <dt class="text-surface-600 dark:text-surface-400">Pengganti tugas</dt>
+                        <dd class="min-w-0 break-words text-surface-800 dark:text-surface-200">{{ fullRequest.substitute_name }}</dd>
+                    </template>
+                    <template v-if="attachment || docPending">
+                        <dt class="text-surface-600 dark:text-surface-400">Dokumen pendukung</dt>
+                        <dd data-tour="detail-attachment" class="min-w-0">
+                            <p v-if="docPending && isFinal" class="text-surface-800 dark:text-surface-200">
+                                Tidak diunggah sebelum pengajuan {{ getStatusLabel(status).toLowerCase() }}.
+                            </p>
+                            <template v-else>
+                                <LeaveAttachment :request="fullRequest" />
+                                <p v-if="docOverdue" class="mt-2 text-xs font-medium text-(--p-tag-danger-color)">Tenggat unggah dokumen sudah lewat.</p>
+                            </template>
+                        </dd>
+                    </template>
+                </dl>
+            </section>
 
-            <LeaveApprovalTimeline data-tour="detail-timeline" :steps="stepsList" />
+            <section class="mt-6 border-t border-surface-200 pt-6 dark:border-surface-800">
+                <LeaveApprovalTimeline data-tour="detail-timeline" :steps="stepsList" />
+            </section>
         </div>
 
         <template #footer>
-            <div class="flex items-center justify-between gap-2 w-full pt-3 border-t border-surface-100 dark:border-surface-800">
-                <div class="flex items-center gap-1">
-                    <TourHelpButton :tour-id="['karyawan.detail', 'approval.detail']" />
+            <div class="flex flex-wrap items-center justify-between gap-3 w-full">
+                <div class="flex items-center">
+                    <TourHelpButton class="!min-h-11" :tour-id="['karyawan.detail', 'approval.detail']" />
+                </div>
+
+                <div class="flex min-w-0 items-center gap-2 ml-auto">
                     <Button
                         label="Tutup"
                         severity="secondary"
-                        class="text-xs font-semibold px-4"
+                        text
+                        class="!min-h-11 !px-3 !text-sm !font-medium"
                         @click="emit('update:visible', false)"
                     />
-                </div>
-
-                <div data-tour="detail-actions" class="flex items-center gap-2">
-                    <Button
-                        v-if="['approved', 'completed'].includes(status)"
-                        label="Cetak Surat Cuti"
-                        severity="secondary"
-                        outlined
-                        class="text-xs flex items-center gap-1.5 font-semibold"
-                        @click="printDocument"
-                    >
-                        <template #icon>
-                            <Printer :size="14" />
-                        </template>
-                    </Button>
-                    <Button
-                        v-else-if="status === 'returned' && can('pengajuan_cuti.edit_returned')"
-                        label="Ajukan Ulang / Ubah"
-                        severity="warn"
-                        class="text-xs flex items-center gap-1.5 font-semibold"
-                        @click="emit('edit', fullRequest); emit('update:visible', false)"
-                    >
-                        <template #icon>
-                            <RotateCcw :size="14" />
-                        </template>
-                    </Button>
-                    <Button
-                        v-else-if="showApproveAction && (status === 'submitted' || status === 'pending_validation')"
-                        label="Proses"
-                        severity="primary"
-                        class="text-xs flex items-center gap-1.5 font-semibold"
-                        @click="emit('process', fullRequest); emit('update:visible', false)"
-                    >
-                        <template #icon>
-                            <ShieldCheck :size="14" />
-                        </template>
-                    </Button>
+                    <div data-tour="detail-actions" class="flex min-w-0 items-center gap-2">
+                        <Button
+                            v-if="['approved', 'completed'].includes(status)"
+                            label="Cetak Surat Cuti"
+                            severity="secondary"
+                            outlined
+                            class="!min-h-11 !text-sm !font-medium"
+                            @click="printDocument"
+                        >
+                            <template #icon>
+                                <PhPrinter :size="16" weight="bold" aria-hidden="true" />
+                            </template>
+                        </Button>
+                        <Button
+                            v-else-if="status === 'returned' && can('pengajuan_cuti.edit_returned')"
+                            label="Ajukan Ulang / Ubah"
+                            severity="warn"
+                            class="!min-h-11 !text-sm !font-medium"
+                            @click="emit('edit', fullRequest); emit('update:visible', false)"
+                        >
+                            <template #icon>
+                                <PhArrowUUpLeft :size="16" weight="bold" aria-hidden="true" />
+                            </template>
+                        </Button>
+                        <Button
+                            v-else-if="showApproveAction && (status === 'submitted' || status === 'pending_validation')"
+                            label="Proses"
+                            severity="primary"
+                            class="!min-h-11 !text-sm !font-medium"
+                            @click="emit('process', fullRequest); emit('update:visible', false)"
+                        >
+                            <template #icon>
+                                <PhSealCheck :size="16" weight="bold" aria-hidden="true" />
+                            </template>
+                        </Button>
+                    </div>
                 </div>
             </div>
         </template>
-    </Dialog>
+    </Drawer>
 </template>

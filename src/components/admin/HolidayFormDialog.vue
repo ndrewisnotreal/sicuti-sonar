@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { adminService } from '@/service/adminService';
 import { syncFromBackend, CURRENT_YEAR } from '@/service/sicutiService';
 import { useToast } from 'primevue/usetoast';
@@ -22,6 +22,8 @@ const props = defineProps({
 const emit = defineEmits(['update:visible', 'saved']);
 const toast = useToast();
 const saving = ref(false);
+// Kesalahan validasi tampil di bawah field (audit-014 #2). Syaratnya tetap: tanggal dan nama wajib, akhir tidak sebelum mulai.
+const errors = ref({ date: '', endDate: '', name: '' });
 
 const currentHoliday = ref({
     id: '',
@@ -65,6 +67,7 @@ watch(
     () => props.visible,
     (isOpen) => {
         if (!isOpen) return;
+        errors.value = { date: '', endDate: '', name: '' };
         if (props.isEditing && props.holidayData) {
             currentHoliday.value = { ...props.holidayData };
         } else {
@@ -82,12 +85,15 @@ watch(
 
 async function saveHoliday() {
     const h = currentHoliday.value;
-    if (!h.date || !h.name) {
-        toast.add({ severity: 'error', summary: 'Validasi', detail: 'Tanggal dan Nama hari libur wajib diisi', life: 3000 });
-        return;
-    }
-    if (h.endDate && h.endDate < h.date) {
-        toast.add({ severity: 'error', summary: 'Validasi', detail: 'Tanggal akhir tidak boleh sebelum tanggal mulai', life: 3000 });
+    errors.value = {
+        date: h.date ? '' : 'Tanggal mulai wajib diisi.',
+        endDate: h.date && h.endDate && h.endDate < h.date ? 'Tanggal akhir tidak boleh sebelum tanggal mulai.' : '',
+        name: h.name?.trim() ? '' : 'Nama hari libur wajib diisi.'
+    };
+    const first = errors.value.date ? 'holiday-start' : errors.value.endDate ? 'holiday-end' : errors.value.name ? 'holiday-name' : '';
+    if (first) {
+        await nextTick();
+        document.getElementById(first)?.focus();
         return;
     }
 
@@ -129,7 +135,7 @@ async function saveHoliday() {
         <div class="space-y-5 pt-1 text-sm">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                    <label for="holiday-start" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Mulai tanggal <span class="text-rose-500">*</span></label>
+                    <label for="holiday-start" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Mulai tanggal <span class="text-(--status-danger-fg)" aria-hidden="true">*</span></label>
                     <DatePicker
                         v-model="holidayDate"
                         inputId="holiday-start"
@@ -138,7 +144,12 @@ async function saveHoliday() {
                         iconDisplay="input"
                         placeholder="Pilih tanggal"
                         fluid
+                        :invalid="!!errors.date"
+                        :aria-invalid="!!errors.date"
+                        :aria-describedby="errors.date ? 'holiday-start-error' : undefined"
+                        @update:modelValue="errors.date = ''"
                     />
+                    <p v-if="errors.date" id="holiday-start-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ errors.date }}</p>
                 </div>
                 <div>
                     <label for="holiday-end" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Sampai tanggal</label>
@@ -152,12 +163,27 @@ async function saveHoliday() {
                         placeholder="Satu hari"
                         :minDate="holidayDate || undefined"
                         fluid
+                        :invalid="!!errors.endDate"
+                        :aria-invalid="!!errors.endDate"
+                        :aria-describedby="errors.endDate ? 'holiday-end-error' : undefined"
+                        @update:modelValue="errors.endDate = ''"
                     />
+                    <p v-if="errors.endDate" id="holiday-end-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ errors.endDate }}</p>
                 </div>
             </div>
             <div>
-                <label for="holiday-name" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Nama hari libur <span class="text-rose-500">*</span></label>
-                <InputText id="holiday-name" v-model="currentHoliday.name" class="w-full" placeholder="Contoh: Tahun Baru Masehi" />
+                <label for="holiday-name" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Nama hari libur <span class="text-(--status-danger-fg)" aria-hidden="true">*</span></label>
+                <InputText
+                    id="holiday-name"
+                    v-model="currentHoliday.name"
+                    class="w-full"
+                    placeholder="Contoh: Tahun Baru Masehi"
+                    :invalid="!!errors.name"
+                    :aria-invalid="!!errors.name"
+                    :aria-describedby="errors.name ? 'holiday-name-error' : undefined"
+                    @update:modelValue="errors.name = ''"
+                />
+                <p v-if="errors.name" id="holiday-name-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ errors.name }}</p>
             </div>
             <fieldset>
                 <legend class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Kategori</legend>
@@ -165,21 +191,14 @@ async function saveHoliday() {
                     <label
                         v-for="t in HOLIDAY_TYPES"
                         :key="t.value"
-                        class="relative flex cursor-pointer gap-2.5 rounded-xl border p-3 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary"
+                        class="relative flex cursor-pointer gap-2.5 rounded-border border p-3 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary"
                         :class="
                             currentHoliday.type === t.value
-                                ? t.value === 'national'
-                                    ? 'border-red-400 bg-red-50 dark:border-red-700 dark:bg-red-950/40'
-                                    : 'border-amber-400 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40'
+                                ? 'border-primary bg-primary-50 dark:bg-primary-950/40 ring-1 ring-inset ring-primary'
                                 : 'border-surface-200 hover:border-surface-300 dark:border-surface-700 dark:hover:border-surface-600'
                         "
                     >
                         <input v-model="currentHoliday.type" type="radio" name="holiday-type" :value="t.value" class="sr-only" />
-                        <span
-                            class="mt-1 size-2.5 shrink-0 rounded-full"
-                            :class="t.value === 'national' ? 'bg-red-600' : 'bg-amber-500'"
-                            aria-hidden="true"
-                        />
                         <span>
                             <span class="block font-semibold text-surface-900 dark:text-surface-100">{{ t.label }}</span>
                             <span class="block text-xs text-muted-color mt-0.5">{{ t.hint }}</span>

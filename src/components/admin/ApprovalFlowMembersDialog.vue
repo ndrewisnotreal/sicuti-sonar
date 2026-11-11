@@ -5,7 +5,7 @@ import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 import { memberChoices } from '@/utils/approvalFlowOptions';
 import ApprovalFlowAddMemberDialog from '@/components/admin/ApprovalFlowAddMemberDialog.vue';
-import { Plus, UserMinus, Users } from 'lucide-vue-next';
+import { PhPlus, PhUserMinus, PhUsers } from '@phosphor-icons/vue';
 
 const props = defineProps({
     visible: {
@@ -95,6 +95,8 @@ function removeMember(member) {
         rejectLabel: 'Batal',
         acceptProps: { severity: 'danger' },
         rejectProps: { severity: 'secondary', outlined: true },
+        // Fokus awal di Batal: Enter tidak langsung menjalankan aksi yang tidak bisa diurungkan (audit-016 #3).
+        defaultFocus: 'reject',
         accept: async () => {
             try {
                 await adminService.removeTemplateMember(member.uid_user_system);
@@ -121,7 +123,7 @@ function removeMember(member) {
         <div class="space-y-4 pt-1 text-xs">
             <div class="flex items-center justify-between gap-3">
                 <div class="flex items-center gap-2">
-                    <Users class="w-4 h-4 text-primary" />
+                    <PhUsers :size="16" weight="bold" class="text-primary" aria-hidden="true" />
                     <span class="text-xs font-bold text-surface-800 dark:text-surface-200">
                         Total Anggota: {{ members.length }}
                     </span>
@@ -133,7 +135,7 @@ function removeMember(member) {
                     class="text-xs font-semibold flex items-center gap-1.5"
                     @click="openAddMembers"
                 >
-                    <Plus :size="14" :stroke-width="2" />
+                    <PhPlus :size="14" weight="bold" aria-hidden="true" />
                     <span>Tambah Anggota</span>
                 </Button>
             </div>
@@ -168,11 +170,12 @@ function removeMember(member) {
                     <template #body="{ data }">
                         <button
                             type="button"
-                            class="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg transition-colors cursor-pointer"
+                            class="w-9 h-9 inline-flex items-center justify-center text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-border transition-colors cursor-pointer"
+                            :aria-label="`Keluarkan ${data.nama} dari templat`"
                             title="Keluarkan dari templat"
                             @click="removeMember(data)"
                         >
-                            <UserMinus :size="15" :stroke-width="1.75" />
+                            <PhUserMinus :size="14" weight="bold" aria-hidden="true" />
                         </button>
                     </template>
                 </Column>
