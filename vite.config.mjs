@@ -66,6 +66,9 @@ export default defineConfig(() => {
             environment: 'jsdom',
             globals: true,
             include: ['test/**/*.test.js'],
+            // Runner CI lambat + instrumentasi coverage: import dingin modul (vi.resetModules) bisa >5 detik.
+            testTimeout: 30000,
+            hookTimeout: 30000,
             coverage: {
                 provider: 'istanbul',
                 reporter: ['text', 'html', 'lcov'],
