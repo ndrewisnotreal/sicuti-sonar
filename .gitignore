@@ -67,3 +67,7 @@ Thumbs.db
 
 laporan/
 anti-slop/
+
+# Catatan kerja lokal (tidak ikut ke repo)
+DESIGN.md
+PROGRESS.md
