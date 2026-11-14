@@ -50,12 +50,15 @@ function httpError(message, status, data) {
     return err;
 }
 
+let redirecting = false;
+
 async function sessionExpired(res) {
     const body = await res.json().catch(() => null);
     clearAuth();
-    if (typeof window !== 'undefined' && !window.location.pathname.includes('/auth/login')) {
+    if (typeof window !== 'undefined' && !redirecting && !window.location.pathname.includes('/auth/login')) {
+        redirecting = true;
         try {
-            if (body?.message) sessionStorage.setItem(LOGOUT_NOTICE_KEY, body.message);
+            sessionStorage.setItem(LOGOUT_NOTICE_KEY, 'Sesi Anda berakhir. Silakan masuk kembali.');
         } catch {}
         window.location.href = publicPath('auth/login');
     }

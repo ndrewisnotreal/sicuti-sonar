@@ -229,6 +229,24 @@ describe('leaveFormValidation utils', () => {
         expect(res.error.detail).toContain('Alasan pengajuan cuti wajib diisi');
     });
 
+    it('mengumpulkan semua error field sekaligus pada form kosong', () => {
+        const res = validateLeaveForm({
+            form: { leaveTypeId: 'CT', startDate: null, endDate: null, reason: '', substituteId: '' },
+            selectedLeaveType: leaveType,
+            calculatedDays: 0,
+            remainingBalance: 10,
+            substituteRequired: true
+        });
+        expect(res.valid).toBe(false);
+        expect(Object.keys(res.errors).sort()).toEqual(['reason', 'startDate', 'substituteId']);
+    });
+
+    it('tidak mengeluarkan error tanggal selesai bila tanggal mulai kosong', () => {
+        const base = { form: { ...validForm, startDate: null, endDate: null }, selectedLeaveType: leaveType, calculatedDays: 0, remainingBalance: 10 };
+        expect(Object.keys(validateLeaveForm(base).errors)).toEqual(['startDate']);
+        expect(Object.keys(validateDraftForm({ form: base.form, calculatedDays: 0 }).errors)).toEqual(['startDate']);
+    });
+
     describe('validateDraftForm', () => {
         it('validates a valid draft', () => {
             const res = validateDraftForm({

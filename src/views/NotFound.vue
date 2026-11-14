@@ -7,7 +7,7 @@ const router = useRouter();
 
 <template>
     <!-- Di luar layout: latar dan tema ditetapkan sendiri (audit-033 #6). -->
-    <main class="min-h-screen flex items-center justify-center p-4 bg-surface-100 dark:bg-surface-950">
+    <main class="min-h-svh flex items-center justify-center p-4 bg-surface-100 dark:bg-surface-950">
         <div class="w-full max-w-md text-center bg-surface-0 dark:bg-surface-900 rounded-xl p-8">
             <p class="text-5xl font-bold text-primary mb-2 tabular-nums" aria-hidden="true">404</p>
             <h1 class="text-lg font-bold text-surface-900 dark:text-surface-100 mb-2">Halaman tidak ditemukan</h1>

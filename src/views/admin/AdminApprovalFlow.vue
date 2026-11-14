@@ -578,7 +578,7 @@ onMounted(() => {
                                         severity="secondary"
                                         outlined
                                         size="small"
-                                        class="text-xs !min-h-9"
+                                        class="text-xs !min-h-9 pointer-coarse:!min-h-11"
                                         :data-flow-action="`${f.id_flow}:edit`"
                                         :aria-label="`Ubah tingkat ${f.nm_flow}`"
                                         @click="openEditFlow(f)"
@@ -590,7 +590,7 @@ onMounted(() => {
                                         severity="danger"
                                         text
                                         size="small"
-                                        class="text-xs !min-h-9"
+                                        class="text-xs !min-h-9 pointer-coarse:!min-h-11"
                                         :aria-label="`Hapus tingkat ${f.nm_flow}`"
                                         @click="deleteFlow(f)"
                                     >

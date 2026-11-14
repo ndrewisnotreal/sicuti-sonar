@@ -170,15 +170,11 @@ watch(
 function validateForm() {
     const errs = {};
     const nik = form.value.namecode?.trim() || '';
-    if (!form.value.username?.trim() && nik) form.value.username = nik;
     if (!isAdminRole(form.value.kd_role)) {
-        const nikPattern = form.value.kd_role === 'staff_it' ? /^OS\d{8}$/ : /^\d{8}$/;
         if (!nik) errs.namecode = 'NIK wajib diisi';
-        else if (!nikPattern.test(nik)) {
-            errs.namecode = form.value.kd_role === 'staff_it' ? 'NIK Staff IT: OS diikuti 8 angka' : 'NIK harus 8 angka';
-        }
+        else if (!/^(OS)?\d{8}$/.test(nik)) errs.namecode = 'NIK: 8 angka, atau OS diikuti 8 angka';
     }
-    if (!form.value.username?.trim()) errs.username = 'Username wajib diisi';
+    if (!form.value.username?.trim() && !nik) errs.username = 'Username wajib diisi';
     if (!form.value.nama?.trim()) errs.nama = 'Nama lengkap wajib diisi';
     if (!form.value.kd_role) errs.kd_role = 'Peran wajib dipilih';
     if (!form.value.kd_dept) errs.kd_dept = 'Divisi wajib dipilih';
@@ -237,7 +233,8 @@ async function saveAccount() {
     saving.value = true;
     try {
         const payload = {
-            username: form.value.username.trim(),
+            // Username kosong -> NIK dipakai hanya di payload, tidak ditulis balik ke form (B-F3).
+            username: form.value.username?.trim() || form.value.namecode.trim(),
             nama: form.value.nama.trim(),
             email: form.value.email?.trim() || undefined,
             namecode: form.value.namecode?.trim() || undefined,
@@ -280,6 +277,14 @@ async function saveAccount() {
         emit('update:visible', false);
         emit('saved');
     } catch (err) {
+        if (err.status === 409) {
+            // Duplikat ditandai di field (B-F9); pesan backend menyebut "Username", jadi bila username dikosongkan tandai NIK.
+            const key = form.value.username?.trim() ? 'username' : 'namecode';
+            formErrors.value = { [key]: key === 'namecode' ? 'NIK sudah dipakai akun lain' : err.message };
+            await nextTick();
+            document.getElementById(key === 'namecode' ? 'acc-nik' : 'acc-username')?.focus();
+            return;
+        }
         toast.add({
             severity: 'error',
             summary: 'Gagal Menyimpan',
@@ -310,12 +315,13 @@ async function saveAccount() {
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                    <label for="acc-username" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Username <span class="text-(--status-danger-fg)" aria-hidden="true">*</span></label>
+                    <label for="acc-username" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">Username <span v-if="!form.namecode?.trim()" class="text-(--status-danger-fg)" aria-hidden="true">*</span></label>
                     <InputText
                         id="acc-username"
                         v-model="form.username"
                         class="w-full"
                         placeholder="Kosongkan untuk memakai NIK"
+                        :aria-required="!form.namecode?.trim()"
                         :disabled="isEditing"
                         :invalid="Boolean(fieldError('username'))"
                         :aria-invalid="Boolean(fieldError('username'))"
@@ -324,12 +330,13 @@ async function saveAccount() {
                     <p v-if="fieldError('username')" id="acc-username-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ fieldError('username') }}</p>
                 </div>
                 <div>
-                    <label for="acc-nik" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">NIK / ID pegawai</label>
+                    <label for="acc-nik" class="block font-medium text-surface-700 dark:text-surface-300 mb-1.5">NIK / ID pegawai <span v-if="!isAdminRole(form.kd_role)" class="text-(--status-danger-fg)" aria-hidden="true">*</span></label>
                     <InputText
                         id="acc-nik"
                         v-model="form.namecode"
                         class="w-full"
                         placeholder="Contoh: 24011021 / OS24980032"
+                        :aria-required="!isAdminRole(form.kd_role)"
                         :invalid="Boolean(fieldError('namecode'))"
                         :aria-invalid="Boolean(fieldError('namecode'))"
                         :aria-describedby="describedBy('namecode', 'acc-nik')"

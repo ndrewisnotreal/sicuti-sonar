@@ -26,6 +26,10 @@ const props = defineProps({
         type: String,
         default: '-'
     },
+    idLabel: {
+        type: String,
+        default: 'NIK'
+    },
     photoUrl: {
         type: String,
         default: ''
@@ -95,7 +99,7 @@ function onPhotoSelected(event) {
             <div class="text-base font-bold text-surface-900 dark:text-surface-0 leading-snug break-words">{{ name }}</div>
             <div v-if="known(roleName)" class="text-xs text-surface-700 dark:text-surface-300">{{ roleName }}</div>
             <div v-if="deptLine" class="text-xs text-muted-color">{{ deptLine }}</div>
-            <div class="text-xs text-muted-color">NIK <span class="font-mono text-surface-800 dark:text-surface-200">{{ nip }}</span></div>
+            <div class="text-xs text-muted-color">{{ idLabel }} <span class="font-mono text-surface-800 dark:text-surface-200">{{ nip }}</span></div>
 
             <div class="flex flex-wrap gap-2 pt-2">
                 <Button

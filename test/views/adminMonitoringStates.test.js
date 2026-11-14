@@ -9,6 +9,9 @@ vi.mock('@/service/adminService', () => ({ adminService: {
     getLeaveRequests: mocks.requests, getLeaveTypes: mocks.types, getDepartments: mocks.departments
 } }));
 vi.mock('@/utils/reportExport', () => ({ downloadExcel: mocks.download }));
+const routeQuery = {};
+const routerReplace = vi.fn();
+vi.mock('vue-router', () => ({ useRoute: () => ({ query: routeQuery }), useRouter: () => ({ replace: routerReplace }) }));
 vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: mocks.toast }) }));
 vi.mock('@/service/sicutiService', async () => {
     const { ref, reactive } = await import('vue');
@@ -39,6 +42,7 @@ async function open() {
 }
 beforeEach(() => {
     vi.clearAllMocks();
+    delete routeQuery.detailId;
     mocks.requests.mockResolvedValue([{ id_request: 'REQ-1' }]);
     mocks.types.mockResolvedValue([{ kd_leave_type: 'CT' }]);
     mocks.departments.mockResolvedValue([{ kd_dept: 'SIT' }]);
@@ -148,5 +152,18 @@ describe('Pemantauan: data gagal, data terakhir dan filter', () => {
         await button('Ekspor Excel').trigger('click');
         expect(mocks.download).toHaveBeenCalledTimes(1);
         expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ summary: 'Tidak ada data' }));
+    });
+});
+
+describe('Pemantauan: deep link notifikasi', () => {
+    it('?detailId membuka dialog detail pengajuan itu lalu membersihkan query', async () => {
+        routeQuery.detailId = 'REQ-1';
+        mocks.requests.mockResolvedValueOnce([{ id_request: 'REQ-1' }]);
+        wrapper = mount(AdminMonitoring, { global: { stubs: { ...stubs, LeaveDetailDialog: { props: ['visible', 'request'], template: '<div class="detail" :data-visible="visible" :data-id="request && request.id"></div>' } } } });
+        await flushPromises();
+        const dialog = wrapper.find('.detail');
+        expect(dialog.attributes('data-visible')).toBe('true');
+        expect(dialog.attributes('data-id')).toBe('REQ-1');
+        expect(routerReplace).toHaveBeenCalledWith({ query: {} });
     });
 });

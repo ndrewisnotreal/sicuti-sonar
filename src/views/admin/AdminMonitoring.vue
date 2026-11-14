@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { adminService } from '@/service/adminService';
 import {
     getAdminDivision,
@@ -75,6 +76,20 @@ function viewDetail(req) {
     selectedRequest.value = req;
     detailVisible.value = true;
 }
+
+const route = useRoute();
+const router = useRouter();
+
+// Deep link dari notifikasi: ?detailId=<id> membuka dialog detail; dialog mengambil detail lengkap sendiri lewat id.
+watch(
+    () => route.query.detailId,
+    (id) => {
+        if (!id) return;
+        viewDetail(requests.value.find((r) => String(r.id_request || r.id) === String(id)) || { id });
+        router.replace({ query: {} });
+    },
+    { immediate: true }
+);
 
 const tableRef = ref(null);
 

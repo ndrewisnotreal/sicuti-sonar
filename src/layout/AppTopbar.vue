@@ -1,7 +1,7 @@
 <script setup>
 import { publicPath } from '@/utils/publicPath';
-import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
-import { useRouter, RouterLink } from 'vue-router';
+import { computed, ref, watch, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue';
+import { useRouter } from 'vue-router';
 import { useLayout } from '@/layout/composables/layout';
 import { currentUser, logout, persistCurrentUser, ROLE_LABELS, isAdmin, isSuperAdmin, can } from '@/service/sicutiService';
 import { showSidebar } from '@/layout/composables/sidebarMenu';
@@ -21,6 +21,8 @@ import {
     PhCaretRight
 } from '@phosphor-icons/vue';
 
+const Profile = defineAsyncComponent(() => import('@/views/user/Profile.vue'));
+
 const router = useRouter();
 const {
     toggleMobileMenu,
@@ -32,6 +34,7 @@ const {
 const sidebarToggleLabel = computed(() => (isSidebarCollapsed.value ? 'Lebarkan bilah samping' : 'Ciutkan bilah samping'));
 
 const profileMenuOpen = ref(false);
+const profileDialogOpen = ref(false);
 const profileContainerRef = ref(null);
 
 const photoFailed = ref(false);
@@ -118,6 +121,12 @@ function toggleProfileMenu() {
     profileMenuOpen.value = !profileMenuOpen.value;
 }
 
+function openProfileDialog() {
+    if (!canViewProfile.value) return;
+    profileMenuOpen.value = false;
+    profileDialogOpen.value = true;
+}
+
 const { pageTour, introTour } = useTour();
 
 function handleLogout() {
@@ -156,7 +165,7 @@ function handleLogout() {
                 <PhSidebarSimple v-if="isSidebarCollapsed" :size="22" weight="regular" aria-hidden="true" />
                 <PhSidebarSimple v-else :size="22" weight="regular" aria-hidden="true" />
             </button>
-            <router-link to="/" :class="['flex items-center gap-2 sm:gap-2.5 min-w-0', { 'lg:hidden': showSidebar }]">
+            <router-link to="/" :class="['flex items-center gap-2 sm:gap-2.5 min-w-0 pointer-coarse:min-h-11', { 'lg:hidden': showSidebar }]">
                 <img :src="publicPath('logo-inalum.png')" alt="Logo PT INALUM" class="h-7 sm:h-8 w-auto object-contain shrink-0" />
                 <div class="flex flex-col min-w-0 max-[359px]:hidden">
                     <span class="font-bold text-base leading-tight text-primary">Lebur</span>
@@ -260,12 +269,12 @@ function handleLogout() {
 
                         <div class="p-2 space-y-1">
                             <component
-                                :is="canViewProfile ? RouterLink : 'div'"
-                                :to="canViewProfile ? '/profile' : undefined"
+                                :is="canViewProfile ? 'button' : 'div'"
+                                :type="canViewProfile ? 'button' : undefined"
                                 :aria-disabled="!canViewProfile || undefined"
                                 :title="canViewProfile ? undefined : 'Izin melihat profil tidak aktif untuk peran Anda'"
-                                @click="canViewProfile && (profileMenuOpen = false)"
-                                class="flex items-center justify-between p-2.5 rounded-xl transition-colors group text-decoration-none"
+                                @click="openProfileDialog"
+                                class="w-full flex items-center justify-between p-2.5 rounded-xl transition-colors group text-left border-none bg-transparent"
                                 :class="canViewProfile ? 'hover:bg-surface-100 dark:hover:bg-surface-800 cursor-pointer' : 'opacity-50 cursor-not-allowed'"
                             >
                                 <div class="flex items-center gap-3">
@@ -315,4 +324,5 @@ function handleLogout() {
             </div>
         </div>
     </header>
+    <Profile v-if="profileDialogOpen" @close="profileDialogOpen = false" />
 </template>

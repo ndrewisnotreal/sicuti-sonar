@@ -1,7 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
-import { useRouter } from 'vue-router';
-import { currentUser, persistCurrentUser } from '@/service/sicutiService';
+import { currentUser, persistCurrentUser, isAdmin, isSuperAdmin } from '@/service/sicutiService';
 import { authService } from '@/service/authService';
 import api, { assetUrl } from '@/service/api';
 import { useToast } from 'primevue/usetoast';
@@ -10,7 +9,7 @@ import { PhFloppyDisk, PhX } from '@phosphor-icons/vue';
 import { passwordChecks as checkPassword } from '@/utils/passwordRules';
 import ProfileAvatarSection from '@/components/user/ProfileAvatarSection.vue';
 import ProfilePasswordSection from '@/components/user/ProfilePasswordSection.vue';
-const router = useRouter();
+const emit = defineEmits(['close']);
 const toast = useToast();
 const confirm = useConfirm();
 const profile = ref(null);
@@ -18,6 +17,8 @@ const saving = ref(false);
 const loadError = ref(false);
 const errors = ref({});
 let confirming = false;
+let trigger = null;
+const dialogRef = ref(null);
 
 const form = ref({
     email: '',
@@ -49,6 +50,10 @@ const view = computed(() => {
         hasSavedPhoto: Boolean(savedPhoto)
     };
 });
+
+// Selaras dengan menu akun di topbar: admin memakai "Username", Admin Super tidak terikat satu divisi (D-F10).
+const adminAccount = computed(() => isAdmin(currentUser.value));
+const allDivisions = computed(() => isSuperAdmin(currentUser.value));
 
 const userInitials = computed(() => {
     const name = view.value.name;
@@ -110,18 +115,18 @@ function cancelChanges() {
 
 function leave() {
     cancelChanges();
-    if (window.history.state?.back) {
-        router.back();
-    } else {
-        router.push('/');
-    }
+    emit('close');
 }
 
 // Perubahan yang belum disimpan tidak hilang diam-diam lewat Esc, klik luar, atau Batal (audit-031 #4).
+// `confirming` harus turun di semua jalur tutup konfirmasi (accept, reject, onHide); PrimeVue tidak memanggil onHide saat "Lanjut mengedit".
 function handleClose() {
     if (confirming || saving.value) return;
     if (!isDirty.value) return leave();
     confirming = true;
+    const done = () => {
+        confirming = false;
+    };
     confirm.require({
         header: 'Buang perubahan?',
         message: 'Perubahan profil yang belum disimpan akan hilang.',
@@ -130,16 +135,40 @@ function handleClose() {
         acceptProps: { severity: 'danger' },
         rejectProps: { severity: 'secondary', outlined: true },
         defaultFocus: 'reject',
-        accept: leave,
-        onHide: () => {
-            confirming = false;
-        }
+        accept: () => {
+            done();
+            leave();
+        },
+        reject: done,
+        onHide: done
     });
 }
 
 function handleKeyDown(event) {
     if (event.key === 'Escape' && !confirming) {
         handleClose();
+    }
+}
+
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+// Panel `aria-modal` buatan sendiri: Tab berputar di dalam dialog (WCAG 2.1.2/2.4.3, audit D-F3).
+function trapTab(event) {
+    if (event.key !== 'Tab' || confirming || !dialogRef.value) return;
+    const items = [...dialogRef.value.querySelectorAll(FOCUSABLE)].filter((el) => el.getClientRects().length > 0);
+    if (!items.length) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement;
+    if (!dialogRef.value.contains(active)) {
+        event.preventDefault();
+        first.focus();
+    } else if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+    } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
     }
 }
 
@@ -241,22 +270,40 @@ async function saveChanges() {
         syncSessionUser();
         // Simpan bertahap: sebutkan bagian yang sudah tersimpan agar tidak dikira gagal semua (audit-031 #9).
         const done = saved.length ? ` Yang sudah tersimpan: ${saved.join(' dan ')}.` : '';
-        toast.add({ severity: 'error', summary: 'Perubahan gagal disimpan', detail: `${err.message || 'Coba lagi beberapa saat.'}${done}`, life: 6000 });
+        if (passwordStarted.value && /password saat ini|kata sandi saat ini/i.test(err.message || '')) {
+            // Sandi saat ini salah ditulis di bawah field-nya, field dikosongkan dan difokus (D-F8).
+            form.value.currentPassword = '';
+            // Watcher form menghapus pesan field yang berubah; tulis pesan setelah flush-nya.
+            nextTick(() => {
+                errors.value = { ...errors.value, currentPassword: 'Kata sandi saat ini salah.' };
+                nextTick(() => document.getElementById(FIELD_IDS.currentPassword)?.focus());
+            });
+            if (done) toast.add({ severity: 'warn', summary: 'Sebagian tersimpan', detail: done.trim(), life: 6000 });
+        } else {
+            toast.add({ severity: 'error', summary: 'Perubahan gagal disimpan', detail: `${err.message || 'Coba lagi beberapa saat.'}${done}`, life: 6000 });
+        }
     } finally {
         saving.value = false;
     }
 }
 
 onMounted(async () => {
+    // Item menu "Profil" sudah dilepas dari DOM saat dialog dimuat; pemicunya tombol akun di topbar (D-F3).
+    trigger = document.querySelector('[data-tour="profile"]');
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', trapTab);
+    await nextTick();
+    dialogRef.value?.focus();
     await loadProfile();
     syncSessionUser();
     resetForm();
-    window.addEventListener('keydown', handleKeyDown);
 });
 
 onBeforeUnmount(() => {
     clearPendingPhoto();
     window.removeEventListener('keydown', handleKeyDown);
+    window.removeEventListener('keydown', trapTab);
+    if (trigger?.isConnected) trigger.focus();
 });
 </script>
 
@@ -267,7 +314,9 @@ onBeforeUnmount(() => {
         @click.self="handleClose"
     >
         <div
-            class="relative w-full max-w-[580px] max-h-[90vh] flex flex-col rounded-xl bg-surface-0 dark:bg-surface-900 shadow-xl overflow-hidden text-surface-900 dark:text-surface-0 my-auto profile-enter"
+            ref="dialogRef"
+            tabindex="-1"
+            class="relative w-full max-w-[580px] max-h-[90vh] flex flex-col rounded-xl bg-surface-0 dark:bg-surface-900 shadow-xl overflow-hidden text-surface-900 dark:text-surface-0 my-auto profile-enter focus:outline-none"
             role="dialog"
             aria-modal="true"
             aria-labelledby="profile-dialog-title"
@@ -297,9 +346,10 @@ onBeforeUnmount(() => {
                 <ProfileAvatarSection
                     :name="view.name"
                     :role-name="view.roleName || view.position"
-                    :dept-name="view.deptName"
-                    :dept-code="view.deptCode"
+                    :dept-name="allDivisions ? 'Semua divisi' : view.deptName"
+                    :dept-code="allDivisions ? '-' : view.deptCode"
                     :nip="view.nip"
+                    :id-label="adminAccount ? 'Username' : 'NIK'"
                     :photo-url="view.photo"
                     :has-saved-photo="view.hasSavedPhoto"
                     :is-pending-photo="Boolean(pendingPhoto)"

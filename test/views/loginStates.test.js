@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 
 const login = vi.fn();
+const push = vi.fn();
+let routeQuery = {};
 vi.mock('@/service/sicutiService', () => ({ login: (...a) => login(...a) }));
 vi.mock('@/service/api', () => ({ default: { post: vi.fn() }, LOGOUT_NOTICE_KEY: 'k' }));
 vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: vi.fn() }) }));
-vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('vue-router', () => ({ useRouter: () => ({ push }), useRoute: () => ({ query: routeQuery }) }));
 
 import Login from '@/views/auth/Login.vue';
 
@@ -19,7 +21,35 @@ const stubs = {
 };
 
 describe('Login (audit-032)', () => {
-    beforeEach(() => vi.clearAllMocks());
+    beforeEach(() => {
+        vi.clearAllMocks();
+        routeQuery = {};
+    });
+
+    async function submitOk(w) {
+        await w.find('#login-id').setValue('123');
+        await w.find('#login-password').setValue('x');
+        await w.find('form').trigger('submit');
+        await flushPromises();
+    }
+
+    it('D-F9 login berhasil kembali ke tujuan semula lewat ?redirect internal', async () => {
+        login.mockResolvedValueOnce({ success: true, user: { name: 'Budi' } });
+        routeQuery = { redirect: '/admin/accounts?x=1' };
+        const w = mount(Login, { global: { stubs }, attachTo: document.body });
+        await submitOk(w);
+        expect(push).toHaveBeenCalledWith('/admin/accounts?x=1');
+        w.unmount();
+    });
+
+    it('D-F9 ?redirect eksternal ditolak (open redirect) → ke /', async () => {
+        login.mockResolvedValueOnce({ success: true, user: { name: 'Budi' } });
+        routeQuery = { redirect: '//evil.example/x' };
+        const w = mount(Login, { global: { stubs }, attachTo: document.body });
+        await submitOk(w);
+        expect(push).toHaveBeenCalledWith('/');
+        w.unmount();
+    });
 
     it('#2 isian kosong → pesan di bawah field, tidak memanggil login', async () => {
         const w = mount(Login, { global: { stubs }, attachTo: document.body });

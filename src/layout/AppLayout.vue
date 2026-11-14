@@ -56,7 +56,7 @@ const mainRef = ref(null);
             class="!w-72 sidebar-navy !bg-primary-900 dark:!bg-surface-900 !text-white !border-0"
             :pt="{ pcCloseButton: { root: { class: '!w-11 !h-11 !text-white hover:!bg-white/15' } } }"
         >
-            <div class="h-full flex flex-col overflow-y-auto p-1">
+            <div class="h-full flex flex-col overflow-y-auto overscroll-contain p-1">
                 <AppMenu :collapsed="false" @item-click="closeMobileMenu" />
             </div>
         </Drawer>
@@ -70,6 +70,7 @@ const mainRef = ref(null);
     </div>
 
     <!-- Lebar default 25rem melebihi layar HP; di layar kecil toast mengikuti lebar layar dengan jarak 0.75rem. -->
-    <Toast :breakpoints="{ '640px': { width: 'calc(100vw - 1.5rem)', right: '0.75rem', left: 'auto', top: '0.75rem' } }" />
-    <ConfirmDialog />
+    <Toast :breakpoints="{ '640px': { width: 'calc(100vw - 1.5rem)', right: '0.75rem', left: 'auto', top: 'auto', bottom: '0.75rem' } }" />
+    <!-- Di HP konfirmasi dulu menempel ke tepi layar; lebarnya disamakan dengan dialog lain (95vw, audit-013 #15). Desktop tidak terpengaruh. -->
+    <ConfirmDialog :breakpoints="{ '640px': '95vw' }" />
 </template>

@@ -63,6 +63,8 @@ export async function startTour(tour) {
         nextBtnText: 'Lanjut',
         prevBtnText: 'Kembali',
         doneBtnText: 'Selesai',
+        // driver.js tidak melokalkan label tombol tutup (×); bawaannya "Close" (D-F10).
+        closeBtnLabel: 'Tutup',
         popoverClass: 'lebur-tour',
         overlayOpacity: 0.55,
         stagePadding: 6,

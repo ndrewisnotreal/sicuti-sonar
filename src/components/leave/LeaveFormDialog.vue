@@ -1,7 +1,7 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { leaveService } from '@/service/leaveService';
-import { currentUser, isSubstituteRequired, lastReturnNote, syncFromBackend } from '@/service/sicutiService';
+import { currentUser, isSubstituteRequired, lastReturnNote, syncFromBackend, sicutiState } from '@/service/sicutiService';
 import { useToast } from 'primevue/usetoast';
 import { countWorkingDays, latestEndDate } from '@/utils/workingDays';
 import LeaveAttachmentUpload from '@/components/leave/LeaveAttachmentUpload.vue';
@@ -9,6 +9,7 @@ import LeaveFormValidationAlert from '@/components/leave/LeaveFormValidationAler
 import LeaveFormDurationInfo from '@/components/leave/LeaveFormDurationInfo.vue';
 import TourHelpButton from '@/components/common/TourHelpButton.vue';
 import { validateLeaveForm, validateDraftForm } from '@/utils/leaveFormValidation';
+import { findOverlappingRequests, overlapConflictNote } from '@/utils/leaveOverlap';
 import {
     PhPaperPlaneRight,
     PhFloppyDisk
@@ -50,6 +51,7 @@ const returnNote = ref(null);
 const isSubmitting = ref(false);
 const loadingInit = ref(false);
 const validationAlert = ref(null);
+const formErrors = ref({});
 const leaveTypes = ref([]);
 const holidays = ref([]);
 const balances = ref([]);
@@ -230,6 +232,7 @@ function resetForm() {
         existingAttachmentUrl: ''
     };
     validationAlert.value = null;
+    formErrors.value = {};
 }
 
 async function loadInitialData() {
@@ -284,6 +287,16 @@ watch(
     { immediate: true }
 );
 
+// Error sebuah field hilang begitu nilainya berubah.
+for (const key of ['leaveTypeId', 'startDate', 'endDate', 'substituteId', 'reason']) {
+    watch(
+        () => form.value[key],
+        () => {
+            if (formErrors.value[key]) formErrors.value = { ...formErrors.value, [key]: undefined };
+        }
+    );
+}
+
 const attachmentModel = computed({
     get: () =>
         form.value.documentName
@@ -311,6 +324,27 @@ function removeFile() {
     form.value.existingAttachmentUrl = '';
 }
 
+// Urut sesuai tampilan form; dipakai untuk fokus ke field salah pertama (pola AccountFormDialog).
+const FIELD_ORDER = [
+    ['leaveTypeId', 'leave-type'],
+    ['startDate', 'leave-start-date'],
+    ['endDate', 'leave-end-date'],
+    ['substituteId', 'leave-substitute'],
+    ['reason', 'leave-reason']
+];
+const fieldError = (key) => formErrors.value[key] || '';
+const describedBy = (key, id) => (formErrors.value[key] ? `${id}-error` : undefined);
+
+// scrollIntoView, bukan focus(): fokus ke DatePicker/Select membuka overlay yang menutupi pesan error di HP; hanya Textarea yang difokuskan.
+async function focusFirstInvalid() {
+    const first = FIELD_ORDER.find(([key]) => formErrors.value[key]);
+    await nextTick();
+    const el = first && document.getElementById(first[1]);
+    if (!el) return;
+    el.scrollIntoView?.({ block: 'center' });
+    if (el.tagName === 'TEXTAREA') el.focus();
+}
+
 function validateForm() {
     const result = validateLeaveForm({
         form: form.value,
@@ -321,8 +355,10 @@ function validateForm() {
         formatDate
     });
 
+    formErrors.value = result.errors;
     if (!result.valid) {
-        toast.add(result.error);
+        if (result.error && !Object.keys(result.errors).length) toast.add(result.error);
+        else void focusFirstInvalid();
         return false;
     }
     return true;
@@ -359,8 +395,9 @@ async function saveDraft() {
         calculatedDays: calculatedDays.value,
         formatDate
     });
+    formErrors.value = result.errors;
     if (!result.valid) {
-        toast.add(result.error);
+        void focusFirstInvalid();
         return;
     }
     isSavingDraft.value = true;
@@ -437,10 +474,18 @@ async function submitLeave() {
         const isBackdate = (status === 400 || status === 422) && (lower.includes('lampau') || lower.includes('backdate') || lower.includes('masa lalu') || lower.includes('minimal hari ini'));
 
         if (isOverlap) {
+            const conflicts = findOverlappingRequests(sicutiState.leaveRequests, {
+                start: formatDate(form.value.startDate),
+                end: formatDate(form.value.endDate),
+                userId: currentUser.value?.uid_user_system || currentUser.value?.id,
+                excludeId: editingId.value
+            });
+            const note = overlapConflictNote(conflicts);
+            const base = errorDetail || 'Rentang tanggal cuti yang Anda pilih bertabrakan dengan jadwal pengajuan cuti aktif lainnya. Silakan tentukan rentang tanggal berbeda.';
             validationAlert.value = {
                 severity: 'error',
                 title: 'Bentrok Jadwal Cuti (Overlap)',
-                message: errorDetail || 'Rentang tanggal cuti yang Anda pilih bertabrakan dengan jadwal pengajuan cuti aktif lainnya. Silakan tentukan rentang tanggal berbeda.'
+                message: note ? `${base} ${note}` : base
             };
         } else if (isBackdate) {
             validationAlert.value = {
@@ -478,7 +523,8 @@ function closeDialog() {
         :closable="true"
         dismissableMask
     >
-        <div class="space-y-4 pt-1 pb-16 sm:pb-4 overflow-y-auto max-h-[calc(85vh-8rem)]">
+        <!-- Di HP isi dialog sudah digulir oleh Dialog sendiri; gulir dalam di sini hanya dari sm agar tidak muncul dua scrollbar (audit-013 #13). -->
+        <div class="space-y-4 pt-1 pb-16 sm:pb-4 sm:overflow-y-auto sm:max-h-[calc(85vh-8rem)]">
             <LeaveFormValidationAlert
                 :return-note="isEditMode ? returnNote : null"
                 :validation-alert="validationAlert"
@@ -487,7 +533,7 @@ function closeDialog() {
 
             <div data-tour="form-type">
                 <div class="flex items-center justify-between mb-1.5">
-                    <label class="text-sm font-medium text-surface-700 dark:text-surface-200">
+                    <label for="leave-type" class="text-sm font-medium text-surface-700 dark:text-surface-200">
                         Jenis Cuti <span class="text-red-500">*</span>
                     </label>
                     <span class="text-xs text-muted-color">
@@ -496,12 +542,16 @@ function closeDialog() {
                 </div>
                 <Select
                     v-model="form.leaveTypeId"
+                    inputId="leave-type"
                     :options="activeLeaveTypes"
                     optionLabel="name"
                     optionValue="id"
                     placeholder="Pilih Jenis Cuti"
                     class="w-full"
+                    :invalid="Boolean(fieldError('leaveTypeId'))"
+                    :aria-describedby="describedBy('leaveTypeId', 'leave-type')"
                 />
+                <p v-if="fieldError('leaveTypeId')" id="leave-type-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ fieldError('leaveTypeId') }}</p>
                 <div v-if="selectedLeaveType?.description" class="text-xs text-muted-color mt-1.5">
                     {{ selectedLeaveType.description }}
                     <span v-if="!selectedLeaveType.usesQuota" class="text-emerald-600 dark:text-emerald-400 font-medium ml-1">(Bebas pemotongan kuota tahunan)</span>
@@ -515,23 +565,28 @@ function closeDialog() {
             <div data-tour="form-dates">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2">
                     <div>
-                        <label class="block text-sm font-medium text-surface-700 dark:text-surface-200 mb-1.5">
+                        <label for="leave-start-date" class="block text-sm font-medium text-surface-700 dark:text-surface-200 mb-1.5">
                             Tanggal Mulai <span class="text-red-500">*</span>
                         </label>
                         <DatePicker
                             v-model="form.startDate"
+                            inputId="leave-start-date"
                             dateFormat="dd M yy"
                             placeholder="Pilih Tanggal Mulai"
                             class="w-full"
                             showIcon
+                            :invalid="Boolean(fieldError('startDate'))"
+                            :aria-describedby="describedBy('startDate', 'leave-start-date')"
                         />
+                        <p v-if="fieldError('startDate')" id="leave-start-date-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ fieldError('startDate') }}</p>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-surface-700 dark:text-surface-200 mb-1.5">
+                        <label for="leave-end-date" class="block text-sm font-medium text-surface-700 dark:text-surface-200 mb-1.5">
                             Tanggal Selesai <span class="text-red-500">*</span>
                         </label>
                         <DatePicker
                             v-model="form.endDate"
+                            inputId="leave-end-date"
                             :minDate="minEndDate"
                             :maxDate="maxEndDate"
                             :disabled="!selectedLeaveType || !form.startDate"
@@ -539,7 +594,10 @@ function closeDialog() {
                             placeholder="Pilih Tanggal Selesai"
                             class="w-full"
                             showIcon
+                            :invalid="Boolean(fieldError('endDate'))"
+                            :aria-describedby="describedBy('endDate', 'leave-end-date')"
                         />
+                        <p v-if="fieldError('endDate')" id="leave-end-date-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ fieldError('endDate') }}</p>
                     </div>
                 </div>
 
@@ -551,13 +609,14 @@ function closeDialog() {
             </div>
 
             <div data-tour="form-substitute">
-                <label class="block text-sm font-medium text-surface-700 dark:text-surface-200 mb-1.5">
+                <label for="leave-substitute" class="block text-sm font-medium text-surface-700 dark:text-surface-200 mb-1.5">
                     Pengganti tugas
                     <span v-if="substituteRequired" class="text-red-500">*</span>
                     <span v-else class="text-xs font-normal text-muted-color">(opsional)</span>
                 </label>
                 <Select
                     v-model="form.substituteId"
+                    inputId="leave-substitute"
                     :options="colleagueOptions"
                     optionLabel="label"
                     optionValue="value"
@@ -565,19 +624,28 @@ function closeDialog() {
                     filter
                     :showClear="!substituteRequired"
                     class="w-full"
+                    :invalid="Boolean(fieldError('substituteId'))"
+                    :aria-describedby="describedBy('substituteId', 'leave-substitute')"
                 />
+                <p v-if="fieldError('substituteId')" id="leave-substitute-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ fieldError('substituteId') }}</p>
             </div>
 
             <div data-tour="form-reason">
-                <label class="block text-sm font-medium text-surface-700 dark:text-surface-200 mb-1.5">
+                <label for="leave-reason" class="block text-sm font-medium text-surface-700 dark:text-surface-200 mb-1.5">
                     Alasan Pengajuan Cuti <span class="text-red-500">*</span>
                 </label>
                 <Textarea
+                    id="leave-reason"
                     v-model="form.reason"
                     rows="3"
                     class="w-full"
                     placeholder="Tuliskan alasan / keperluan permohonan cuti..."
+                    aria-required="true"
+                    :invalid="Boolean(fieldError('reason'))"
+                    :aria-invalid="Boolean(fieldError('reason'))"
+                    :aria-describedby="describedBy('reason', 'leave-reason')"
                 />
+                <p v-if="fieldError('reason')" id="leave-reason-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ fieldError('reason') }}</p>
             </div>
 
             <div v-if="selectedLeaveType?.requiresDocument || form.documentName" data-tour="form-attachment">
@@ -609,7 +677,8 @@ function closeDialog() {
         </div>
 
         <template #footer>
-            <div class="flex items-center justify-between gap-2 w-full pt-3.5 border-t border-surface-100 dark:border-surface-800">
+            <!-- Di HP tombol kirim/draf di baris sendiri selebar penuh agar labelnya tidak pecah dua baris (audit-013 #15). -->
+            <div class="flex max-sm:flex-col-reverse max-sm:items-stretch items-center justify-between gap-2 w-full pt-3.5 border-t border-surface-100 dark:border-surface-800">
                 <div class="flex items-center gap-1">
                     <TourHelpButton tour-id="karyawan.formulir" />
                     <Button
@@ -621,13 +690,13 @@ function closeDialog() {
                         @click="closeDialog"
                     />
                 </div>
-                <div data-tour="form-actions" class="flex items-center gap-2">
+                <div data-tour="form-actions" class="flex max-sm:grid max-sm:grid-cols-2 items-center gap-2">
                     <Button
                         v-if="canSaveDraft"
                         severity="secondary"
                         outlined
                         size="small"
-                        class="text-xs flex items-center gap-1.5 font-semibold"
+                        class="text-xs flex items-center gap-1.5 font-semibold max-sm:justify-center max-sm:whitespace-nowrap"
                         :loading="isSavingDraft"
                         :disabled="isSubmitting"
                         @click="saveDraft"
@@ -638,7 +707,7 @@ function closeDialog() {
                     <Button
                         severity="primary"
                         size="small"
-                        class="text-xs flex items-center gap-1.5 font-semibold shadow-xs"
+                        class="text-xs flex items-center gap-1.5 font-semibold shadow-xs max-sm:justify-center max-sm:whitespace-nowrap max-sm:only:col-span-2"
                         :loading="isSubmitting"
                         :disabled="isSavingDraft"
                         @click="submitLeave"

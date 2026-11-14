@@ -131,5 +131,8 @@ app.use(ToastService);
 app.use(ConfirmationService);
 app.directive('tooltip', Tooltip);
 
+// iOS Safari baru menerapkan :active pada sentuhan bila dokumen punya listener touchstart (audit-013 #7).
+document.addEventListener('touchstart', () => {}, { passive: true });
+
 app.mount('#app');
 syncFromBackend();

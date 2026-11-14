@@ -251,7 +251,9 @@ describe('AdminDashboardMonitoringTable', () => {
         expect(w.get('#mon-dept-error').text()).toContain('divisi gagal dimuat');
         expect(w.get('#mon-type-error').text()).toContain('jenis cuti gagal dimuat');
         expect(w.get('[role="alert"]').text()).toContain('filter lain masih dapat digunakan');
-        const selects = w.findAllComponents(SelectStub);
+        // Select status versi HP (audit-013 #3) tidak bergantung pada sumber yang gagal, jadi tidak ikut dinonaktifkan.
+        const selects = w.findAllComponents(SelectStub).filter((s) => s.attributes('inputid') !== 'mon-status-select');
+        expect(selects.length).toBe(2);
         expect(selects.every((s) => s.attributes('disabled') !== undefined)).toBe(true);
         await w.findAll('button').find((b) => b.text() === 'Coba lagi filter').trigger('click');
         expect(w.emitted('refresh')).toHaveLength(1);

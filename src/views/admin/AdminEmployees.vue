@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { adminService } from '@/service/adminService';
 import { getAdminDivision, currentUser, isSuperAdmin, can } from '@/service/sicutiService';
 import { useToast } from 'primevue/usetoast';
@@ -83,6 +83,13 @@ async function loadEmployees() {
     }
 }
 
+// Daftar HP dimuat bertahap, pengganti paginator tabel (pola Akun, audit-013 #5).
+const mobileLimit = ref(10);
+watch([searchQuery, departmentFilter, statusFilter], () => {
+    mobileLimit.value = 10;
+});
+const mobileRows = computed(() => filteredEmployees.value.slice(0, mobileLimit.value));
+
 const filteredEmployees = computed(() => {
     return employees.value.filter((emp) => {
         const targetDept = adminDivision.value || departmentFilter.value;
@@ -96,7 +103,7 @@ const filteredEmployees = computed(() => {
         }
 
         if (searchQuery.value) {
-            const q = searchQuery.value.toLowerCase();
+            const q = searchQuery.value.trim().toLowerCase();
             const name = (emp.nama || emp.name || '').toLowerCase();
             const nik = (emp.namecode || emp.username || '').toLowerCase();
             const email = (emp.email || '').toLowerCase();
@@ -187,7 +194,7 @@ onMounted(() => {
                         optionLabel="label"
                         optionValue="value"
                         placeholder="Pilih Status"
-                        class="w-full sm:w-36 text-xs"
+                        class="w-full sm:w-44 text-xs"
                         size="small"
                     />
                 </div>
@@ -201,7 +208,53 @@ onMounted(() => {
                 <Button label="Coba lagi" severity="secondary" size="small" class="text-xs !min-h-11" :loading="loading" @click="loadEmployees" />
             </div>
 
-            <div data-tour="emp-table" class="mt-4">
+            <!-- Di bawah md tabel 6 kolom terpotong tanpa tanda bisa digeser; daftar memuat isi yang sama (audit-013 #5). -->
+            <div data-tour="emp-table" class="md:hidden mt-4" :aria-busy="loading">
+                <p v-if="loading && !filteredEmployees.length" class="py-8 text-center text-xs text-muted-color" role="status">Memuat karyawan…</p>
+                <p v-else-if="!filteredEmployees.length" class="py-8 text-center text-sm text-muted-color">
+                    <template v-if="loadError">Data karyawan belum termuat.</template>
+                    <template v-else-if="hasFilters">Tidak ada karyawan yang cocok dengan pencarian atau filter.</template>
+                    <template v-else>Belum ada data karyawan.</template>
+                </p>
+                <template v-else>
+                    <ul class="divide-y divide-surface-200 dark:divide-surface-700" :class="{ 'opacity-60': loading }">
+                        <li v-for="(data, i) in mobileRows" :key="data.id || data.namecode || data.username" class="py-3 space-y-1.5 text-xs">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <div class="font-semibold text-sm text-surface-900 dark:text-surface-100">{{ data.nama || data.name }}</div>
+                                    <div class="font-mono text-muted-color break-all">{{ data.namecode || data.username }}</div>
+                                </div>
+                                <span class="shrink-0" :data-tour="i === 0 ? 'emp-col-status' : undefined">
+                                    <Tag v-if="data.is_locked" value="Terkunci" severity="danger" />
+                                    <Tag v-else :value="isAccountActive(data) ? 'Aktif' : 'Nonaktif'" :severity="isAccountActive(data) ? 'success' : 'secondary'" />
+                                </span>
+                            </div>
+                            <div class="text-muted-color break-all">{{ data.email || '-' }}</div>
+                            <div class="text-surface-800 dark:text-surface-200">{{ data.position || '-' }} · {{ data.kd_dept || data.nm_dept || data.department || '-' }}</div>
+                            <div class="text-muted-color">Atasan: {{ data.supervisor_nama || '-' }}</div>
+                            <button
+                                v-if="statusSummary(data)"
+                                type="button"
+                                class="block min-h-11 text-xs text-muted-color underline decoration-dotted underline-offset-2 text-left leading-tight cursor-pointer"
+                                @click="openHistory(data)"
+                            >
+                                {{ statusSummary(data) }}
+                            </button>
+                        </li>
+                    </ul>
+                    <Button
+                        v-if="filteredEmployees.length > mobileLimit"
+                        :label="`Tampilkan ${Math.min(10, filteredEmployees.length - mobileLimit)} lagi`"
+                        severity="secondary"
+                        text
+                        size="small"
+                        class="w-full mt-2 text-xs !min-h-11"
+                        @click="mobileLimit += 10"
+                    />
+                </template>
+            </div>
+
+            <div data-tour="emp-table" class="hidden md:block mt-4">
                 <DataTable
                     :value="filteredEmployees"
                     :loading="loading"

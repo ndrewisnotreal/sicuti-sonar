@@ -407,7 +407,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeUnloa
                         <ul class="space-y-0.5">
                             <li v-for="act in mod.actions" :key="act.key">
                                 <label
-                                    class="flex items-center gap-3 rounded-border px-2 py-1.5 -mx-2 text-sm text-surface-800 dark:text-surface-200 hover:bg-surface-50 dark:hover:bg-surface-800/50"
+                                    class="flex items-center gap-3 rounded-border px-2 py-1.5 pointer-coarse:min-h-11 -mx-2 text-sm text-surface-800 dark:text-surface-200 hover:bg-surface-50 dark:hover:bg-surface-800/50"
                                     :class="isSuper ? 'cursor-default' : 'cursor-pointer'"
                                 >
                                     <input
