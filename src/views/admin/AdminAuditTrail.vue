@@ -4,8 +4,10 @@ import { adminService, AUDIT_ACTION_LABEL, AUDIT_ENTITY_LABEL } from '@/service/
 import { saveBlob } from '@/service/api';
 import { formatDate } from '@/service/sicutiService';
 import { useToast } from 'primevue/usetoast';
+import { localIsoDate } from '@/utils/onLeaveToday';
 import AuditDetailDialog from '@/components/admin/AuditDetailDialog.vue';
-import { auditActionLabel, auditEntityLabel, auditUserName, isAttentionAction } from '@/components/admin/auditLog';
+import DateRangeFilter from '@/components/common/DateRangeFilter.vue';
+import { auditActionLabel, auditEntityLabel, auditUserName, isAttentionAction, describeAuditDetails } from '@/components/admin/auditLog';
 import { PhListMagnifyingGlass, PhMagnifyingGlass, PhArrowsClockwise, PhFileXls, PhEye } from '@phosphor-icons/vue';
 
 // Sama dengan limit yang diminta adminService.getAuditLogs; dipakai untuk menulis jujur bila daftar terpotong (audit-023 #12).
@@ -41,6 +43,31 @@ const filterParams = computed(() => ({
     end_date: iso(dateRange.value?.[1] || dateRange.value?.[0])
 }));
 
+const userNames = ref(new Map());
+const leaveTypeNames = ref(new Map());
+// Nama untuk memetakan ID di log; gagal dimuat tidak mengganggu daftar log (ID mentah tetap tampil).
+async function loadLookups() {
+    const [users, types] = await Promise.allSettled([adminService.getUsers(), adminService.getLeaveTypes()]);
+    if (users.status === 'fulfilled' && Array.isArray(users.value)) {
+        userNames.value = new Map(users.value.map((u) => [u.uid_user_system, u.namecode ? `${u.nama} (NIK ${u.namecode})` : u.nama]));
+    }
+    if (types.status === 'fulfilled' && Array.isArray(types.value)) {
+        leaveTypeNames.value = new Map(types.value.map((t) => [t.kd_leave_type, t.nm_leave_type]));
+    }
+}
+
+function searchTargetIds(term) {
+    const q = String(term || '').trim().toLowerCase();
+    if (q.length < 3) return [];
+    return [...userNames.value].filter(([, name]) => name.toLowerCase().includes(q)).slice(0, 5).map(([uid]) => uid);
+}
+
+function mergeLogs(...lists) {
+    const byId = new Map();
+    for (const l of lists.flat()) byId.set(l.id, l);
+    return [...byId.values()].sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp))).slice(0, LOG_LIMIT);
+}
+
 // Hanya respons permintaan terakhir yang dipakai, agar hasil filter lama tidak menimpa yang baru (audit-023 #2).
 let requestSeq = 0;
 async function loadAuditLogs() {
@@ -48,7 +75,13 @@ async function loadAuditLogs() {
     loading.value = true;
     loadError.value = false;
     try {
-        const data = await adminService.getAuditLogs(filterParams.value);
+        let data = await adminService.getAuditLogs(filterParams.value);
+        // Backend mencari nama pelaku, bukan karyawan target (yang hanya tercatat sebagai ID akun): cari juga lewat ID akun yang namanya cocok.
+        const extra = searchTargetIds(filterParams.value.search);
+        if (extra.length) {
+            const more = await Promise.all(extra.map((uid) => adminService.getAuditLogs({ ...filterParams.value, search: uid })));
+            data = mergeLogs(data, ...more);
+        }
         if (seq !== requestSeq) return;
         logs.value = Array.isArray(data) ? data : [];
     } catch (err) {
@@ -67,7 +100,8 @@ async function loadAuditLogs() {
     }
 }
 
-const filteredLogs = computed(() => logs.value);
+// Keterangan diterjemahkan (ID akun -> nama, kunci mentah -> label) sebelum tampil, diekspor, dan dibuka di dialog.
+const filteredLogs = computed(() => logs.value.map((l) => ({ ...l, details: describeAuditDetails(l.details || l.description, userNames.value, leaveTypeNames.value) })));
 const capped = computed(() => logs.value.length >= LOG_LIMIT);
 
 let searchTimer = null;
@@ -135,7 +169,7 @@ function exportCsv() {
             l.details || l.description || '-'
         ]);
         const csv = '﻿' + [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
-        const stamp = new Date().toISOString().slice(0, 10);
+        const stamp = localIsoDate();
         saveBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `audit_trail_${stamp}.csv`);
         toast.add({
             severity: 'success',
@@ -158,6 +192,7 @@ watch(logs, () => {
 const mobileRows = computed(() => filteredLogs.value.slice(0, mobileLimit.value));
 
 onMounted(() => {
+    loadLookups();
     loadAuditLogs();
 });
 </script>
@@ -213,9 +248,9 @@ onMounted(() => {
                             <InputText
                                 id="cari-audit"
                                 name="cari-audit"
-                                aria-label="Cari audit trail berdasarkan user, aksi, IP, atau detail"
+                                aria-label="Cari audit trail berdasarkan nama karyawan, aksi, IP, atau detail"
                                 v-model="searchQuery"
-                                placeholder="Cari user / aksi / IP / detail..."
+                                placeholder="Cari nama / aksi / IP / detail..."
                                 class="w-full text-xs !min-h-11 sm:!min-h-9"
                                 size="small"
                             />
@@ -249,20 +284,7 @@ onMounted(() => {
                     </div>
                     <div>
                         <span class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1" aria-hidden="true">Rentang tanggal</span>
-                        <DatePicker
-                            v-model="dateRange"
-                            selectionMode="range"
-                            :manualInput="false"
-                            dateFormat="dd M yy"
-                            placeholder="Semua tanggal"
-                            showIcon
-                            iconDisplay="input"
-                            showButtonBar
-                            size="small"
-                            fluid
-                            inputClass="text-xs !min-h-11 sm:!min-h-9"
-                            aria-label="Rentang tanggal log"
-                        />
+                        <DateRangeFilter v-model="dateRange" label="Rentang tanggal log" />
                     </div>
                 </div>
 

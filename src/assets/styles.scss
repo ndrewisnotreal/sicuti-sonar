@@ -54,6 +54,98 @@
     --p-button-success-active-background: var(--p-green-900);
     --p-button-success-active-border-color: var(--p-green-900);
     --p-button-success-focus-ring-color: var(--p-green-700);
+
+    // Tombol danger: teks putih di atas red-500 hanya 3.76:1; red-700 memberi 6.47:1. Teks outlined/text ikut red-700 (audit-013 #12).
+    --p-button-danger-background: var(--p-red-700);
+    --p-button-danger-border-color: var(--p-red-700);
+    --p-button-danger-hover-background: var(--p-red-800);
+    --p-button-danger-hover-border-color: var(--p-red-800);
+    --p-button-danger-active-background: var(--p-red-900);
+    --p-button-danger-active-border-color: var(--p-red-900);
+    --p-button-danger-focus-ring-color: var(--p-red-700);
+    --p-button-outlined-danger-color: var(--p-red-700);
+    --p-button-text-danger-color: var(--p-red-700);
+}
+
+// Layar sentuh tidak punya hover: tap pertama menempelkan :hover sampai pengguna menyentuh tempat lain.
+// CSS PrimeVue ada di cascade layer sehingga tidak bisa dibungkus media query; tokennya disamakan dengan keadaan diam (audit-013 #1).
+// Selektor dobel menyamai spesifisitas blok :root:not(.app-dark) di atas.
+@media (hover: none) {
+    :root:not(.app-dark),
+    :root.app-dark {
+        --p-button-primary-hover-background: var(--p-button-primary-background);
+        --p-button-primary-hover-border-color: var(--p-button-primary-border-color);
+        --p-button-primary-hover-color: var(--p-button-primary-color);
+        --p-button-secondary-hover-background: var(--p-button-secondary-background);
+        --p-button-secondary-hover-border-color: var(--p-button-secondary-border-color);
+        --p-button-secondary-hover-color: var(--p-button-secondary-color);
+        --p-button-info-hover-background: var(--p-button-info-background);
+        --p-button-info-hover-border-color: var(--p-button-info-border-color);
+        --p-button-info-hover-color: var(--p-button-info-color);
+        --p-button-success-hover-background: var(--p-button-success-background);
+        --p-button-success-hover-border-color: var(--p-button-success-border-color);
+        --p-button-success-hover-color: var(--p-button-success-color);
+        --p-button-warn-hover-background: var(--p-button-warn-background);
+        --p-button-warn-hover-border-color: var(--p-button-warn-border-color);
+        --p-button-warn-hover-color: var(--p-button-warn-color);
+        --p-button-help-hover-background: var(--p-button-help-background);
+        --p-button-help-hover-border-color: var(--p-button-help-border-color);
+        --p-button-help-hover-color: var(--p-button-help-color);
+        --p-button-danger-hover-background: var(--p-button-danger-background);
+        --p-button-danger-hover-border-color: var(--p-button-danger-border-color);
+        --p-button-danger-hover-color: var(--p-button-danger-color);
+        --p-button-contrast-hover-background: var(--p-button-contrast-background);
+        --p-button-contrast-hover-border-color: var(--p-button-contrast-border-color);
+        --p-button-contrast-hover-color: var(--p-button-contrast-color);
+        --p-button-outlined-primary-hover-background: transparent;
+        --p-button-outlined-secondary-hover-background: transparent;
+        --p-button-outlined-success-hover-background: transparent;
+        --p-button-outlined-info-hover-background: transparent;
+        --p-button-outlined-warn-hover-background: transparent;
+        --p-button-outlined-help-hover-background: transparent;
+        --p-button-outlined-danger-hover-background: transparent;
+        --p-button-outlined-contrast-hover-background: transparent;
+        --p-button-outlined-plain-hover-background: transparent;
+        --p-button-text-primary-hover-background: transparent;
+        --p-button-text-secondary-hover-background: transparent;
+        --p-button-text-success-hover-background: transparent;
+        --p-button-text-info-hover-background: transparent;
+        --p-button-text-warn-hover-background: transparent;
+        --p-button-text-help-hover-background: transparent;
+        --p-button-text-danger-hover-background: transparent;
+        --p-button-text-contrast-hover-background: transparent;
+        --p-button-text-plain-hover-background: transparent;
+        --p-button-link-hover-color: var(--p-button-link-color);
+        --p-inputtext-hover-border-color: var(--p-inputtext-border-color);
+        --p-inputtext-filled-hover-background: var(--p-inputtext-filled-background);
+        --p-textarea-hover-border-color: var(--p-textarea-border-color);
+        --p-textarea-filled-hover-background: var(--p-textarea-filled-background);
+        --p-select-hover-border-color: var(--p-select-border-color);
+        --p-select-filled-hover-background: var(--p-select-filled-background);
+        --p-multiselect-hover-border-color: var(--p-multiselect-border-color);
+        --p-multiselect-filled-hover-background: var(--p-multiselect-filled-background);
+        --p-datepicker-dropdown-hover-background: var(--p-datepicker-dropdown-background);
+        --p-datepicker-dropdown-hover-border-color: var(--p-datepicker-dropdown-border-color);
+        --p-datepicker-dropdown-hover-color: var(--p-datepicker-dropdown-color);
+        --p-datepicker-date-hover-background: transparent;
+        --p-datepicker-date-hover-color: var(--p-datepicker-date-color);
+        --p-datepicker-select-month-hover-background: transparent;
+        --p-datepicker-select-month-hover-color: var(--p-datepicker-select-month-color);
+        --p-datepicker-select-year-hover-background: transparent;
+        --p-datepicker-select-year-hover-color: var(--p-datepicker-select-year-color);
+        --p-paginator-nav-button-hover-background: var(--p-paginator-nav-button-background);
+        --p-paginator-nav-button-hover-color: var(--p-paginator-nav-button-color);
+        --p-toast-info-close-button-hover-background: transparent;
+        --p-toast-success-close-button-hover-background: transparent;
+        --p-toast-warn-close-button-hover-background: transparent;
+        --p-toast-error-close-button-hover-background: transparent;
+        --p-toast-secondary-close-button-hover-background: transparent;
+        --p-toast-contrast-close-button-hover-background: transparent;
+        --p-checkbox-hover-border-color: var(--p-checkbox-border-color);
+        --p-checkbox-checked-hover-background: var(--p-checkbox-checked-background);
+        --p-checkbox-checked-hover-border-color: var(--p-checkbox-checked-border-color);
+        --p-checkbox-icon-checked-hover-color: var(--p-checkbox-icon-checked-color);
+    }
 }
 
 // DESIGN.md mewajibkan outline fokus 2px; token tema PrimeVue bawaannya 1px. Preset tetap tidak diubah.
@@ -98,6 +190,23 @@
     white-space: nowrap;
 }
 
+// Kunci scroll modal PrimeVue dipindah dari body ke html. Body overflow hidden menjadikan body scroll container sehingga sidebar sticky ikut tergulir (terpotong) saat modal terbuka.
+body.p-overflow-hidden {
+    overflow: visible !important;
+}
+
+html:has(> body.p-overflow-hidden) {
+    overflow-y: hidden;
+}
+
+// Aksi berbahaya di menu "Lainnya" (mis. Nonaktifkan akun) dibedakan dari aksi biasa (audit-013 #10).
+.p-menu .menu-item-danger :is(.p-menu-item-link, .p-menu-item-label) {
+    color: var(--p-red-700);
+}
+.app-dark .p-menu .menu-item-danger :is(.p-menu-item-link, .p-menu-item-label) {
+    color: var(--p-red-400);
+}
+
 .stat-icon {
     display: flex;
     align-items: center;
@@ -113,10 +222,12 @@
     border-color: var(--p-surface-300);
     color: var(--p-surface-700);
 
-    &:hover {
-        background-color: var(--p-surface-100);
-        border-color: var(--p-surface-400);
-        color: var(--p-surface-900);
+    @media (hover: hover) and (pointer: fine) {
+        &:hover {
+            background-color: var(--p-surface-100);
+            border-color: var(--p-surface-400);
+            color: var(--p-surface-900);
+        }
     }
 }
 
@@ -126,10 +237,12 @@
         border-color: var(--p-surface-700);
         color: var(--p-surface-200);
 
-        &:hover {
-            background-color: var(--p-surface-800);
-            border-color: var(--p-surface-600);
-            color: var(--p-surface-0);
+        @media (hover: hover) and (pointer: fine) {
+            &:hover {
+                background-color: var(--p-surface-800);
+                border-color: var(--p-surface-600);
+                color: var(--p-surface-0);
+            }
         }
     }
 }
@@ -223,6 +336,93 @@
     font-size: 0.8125rem;
 }
 
+// Jari, bukan mouse: semua aturan di blok ini hanya berlaku untuk pointer kasar, jadi desktop tidak berubah.
+@media (pointer: coarse) {
+    // iOS Safari memperbesar halaman bila input yang difokus di bawah 16px dan tidak mengecil lagi (audit-013 #2).
+    .p-inputtext,
+    .p-textarea,
+    .p-select-label,
+    .p-multiselect-label,
+    input,
+    textarea,
+    select {
+        font-size: 16px;
+    }
+
+    // Target sentuh minimum 44px (audit-013 #6). min-* mengalahkan w-8/w-9 pada tombol ikon kustom.
+    button,
+    [role='button'],
+    .p-button,
+    .p-select,
+    .p-multiselect,
+    .p-menu-item-link {
+        min-height: 2.75rem;
+    }
+    button:not(.p-button),
+    .p-button.p-button-icon-only {
+        min-width: 2.75rem;
+    }
+
+    // Isian dan kotak centang di dialog admin: input 39px dan kotak 20px terlalu kecil untuk jari (B-F11).
+    .p-dialog .p-inputtext {
+        min-height: 2.75rem;
+    }
+    // Kotak tetap 20px; input transparan di atasnya diperluas jadi 44px agar tap mengenai kotak tanpa menggeser tata letak.
+    .p-dialog .p-checkbox-input {
+        inset: auto;
+        top: 50%;
+        left: 50%;
+        width: 2.75rem;
+        height: 2.75rem;
+        transform: translate(-50%, -50%);
+    }
+
+    // Umpan balik saat ditekan untuk kontrol kustom; hover sudah dibatasi ke mouse. Tombol PrimeVue punya token active sendiri (audit-013 #7).
+    :is(button, a[href], [role='button'], label):not(.p-button, :disabled, [aria-disabled='true']):active {
+        opacity: 0.6;
+    }
+    :root {
+        --p-datepicker-date-width: 2.75rem;
+        --p-datepicker-date-height: 2.75rem;
+    }
+
+    // Tahan lama di kontrol tidak memilih labelnya; tanpa jeda tap ganda (audit-013 #18).
+    button,
+    [role='button'],
+    .p-button,
+    .p-select,
+    .p-paginator-page {
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+    }
+}
+
+button,
+a,
+label,
+[role='button'],
+.p-select {
+    touch-action: manipulation;
+}
+
+// Scroll di panel/dialog berhenti di tepinya, tidak menggeser halaman di belakang (audit-013 #13).
+.p-drawer-content,
+.p-dialog-content,
+.p-select-list-container,
+.p-multiselect-list-container {
+    overscroll-behavior: contain;
+}
+
+// Select ukuran kecil diberi tinggi 44px di HP, tapi labelnya tetap rata atas; teks disejajarkan dengan ikon panah (audit-013 #8).
+@media (max-width: 575.98px), (pointer: coarse) {
+    .p-select .p-select-label,
+    .p-multiselect .p-multiselect-label {
+        display: flex;
+        align-items: center;
+    }
+}
+
 .p-select-overlay,
 .p-dropdown-panel {
     max-width: calc(100vw - 1.5rem) !important;
@@ -247,8 +447,8 @@
         .p-paginator-prev,
         .p-paginator-next,
         .p-paginator-last {
-            min-width: 2rem !important;
-            height: 2rem !important;
+            min-width: 2.75rem !important;
+            height: 2.75rem !important;
             font-size: 0.75rem !important;
             padding: 0 !important;
             margin: 0 !important;

@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { approvalService } from '@/service/approvalService';
 import {
     currentUser,
@@ -128,6 +129,20 @@ function openApprovalModal(req) {
     activeRequest.value = req;
     actionModalVisible.value = true;
 }
+
+const route = useRoute();
+const router = useRouter();
+
+// Deep link dari notifikasi: ?detailId=<id> membuka dialog detail; dialog mengambil detail lengkap sendiri lewat id.
+watch(
+    () => route.query.detailId,
+    (id) => {
+        if (!id) return;
+        viewDetail(pendingRequests.value.find((r) => String(requestId(r)) === String(id)) || { id });
+        router.replace({ query: {} });
+    },
+    { immediate: true }
+);
 </script>
 
 <template>

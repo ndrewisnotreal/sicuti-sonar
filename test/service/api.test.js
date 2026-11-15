@@ -46,7 +46,7 @@ describe('api', () => {
         vi.stubGlobal('location', loc);
         mockFetch(401, { success: false, message: msg, error: msg });
         await expect(api.get('/sicuti/leave-request/mine')).rejects.toMatchObject({ status: 401 });
-        expect(sessionStorage.getItem(LOGOUT_NOTICE_KEY)).toBe(msg);
+        expect(sessionStorage.getItem(LOGOUT_NOTICE_KEY)).toBe('Sesi Anda berakhir. Silakan masuk kembali.');
         expect(loc.href).toBe('/auth/login');
         sessionStorage.clear();
     });
@@ -223,6 +223,22 @@ describe('api', () => {
         await expect(api.post('/sicuti/auth/login', {})).rejects.toMatchObject({ status: 401, message: 'Sesi berakhir, silakan login kembali', data: null });
         expect(loc.href).toBe('/auth/login?x=1');
         SESSION_KEYS.forEach((k) => expect(localStorage.getItem(k)).toBeNull());
+    });
+
+    it('dua 401 bersamaan: redirect dan notice hanya sekali, notice memakai pesan ramah', async () => {
+        vi.resetModules();
+        const fresh = (await import('@/service/api')).default;
+        const loc = { pathname: '/leave/history', href: '/leave/history' };
+        vi.stubGlobal('location', loc);
+        const fetchMock = mockFetch(401, { success: false, message: 'Token login tidak dikirim' });
+        SESSION_KEYS.forEach((k) => setEncryptedItem(k, { a: 1 }));
+        const results = await Promise.allSettled([fresh.get('/sicuti/a'), fresh.get('/sicuti/b')]);
+        expect(results.every((r) => r.status === 'rejected')).toBe(true);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(loc.href).toBe('/auth/login');
+        expect(sessionStorage.getItem(LOGOUT_NOTICE_KEY)).toBe('Sesi Anda berakhir. Silakan masuk kembali.');
+        SESSION_KEYS.forEach((k) => expect(localStorage.getItem(k)).toBeNull());
+        sessionStorage.clear();
     });
 
     it('saveBlob: tautan unduh dilepas dari DOM, object URL dicabut setelah 1 detik', () => {

@@ -3,10 +3,12 @@ import { flushPromises, mount } from '@vue/test-utils';
 
 const getMyLeaves = vi.fn();
 const confirmRequire = vi.fn();
+const toastAdd = vi.fn();
+const route = vi.hoisted(() => ({ query: {} }));
 vi.mock('@/service/leaveService', () => ({ leaveService: { getMyLeaves: (...a) => getMyLeaves(...a), cancelLeave: vi.fn() } }));
-vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: vi.fn() }) }));
+vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: toastAdd }) }));
 vi.mock('primevue/useconfirm', () => ({ useConfirm: () => ({ require: confirmRequire }) }));
-vi.mock('vue-router', () => ({ useRouter: () => ({ replace: vi.fn() }), useRoute: () => ({ query: {} }) }));
+vi.mock('vue-router', () => ({ useRouter: () => ({ replace: vi.fn() }), useRoute: () => route }));
 vi.mock('@/service/sicutiService', async (importOriginal) => ({ ...(await importOriginal()), can: () => true }));
 
 import LeaveHistory from '@/views/leave/LeaveHistory.vue';
@@ -15,6 +17,7 @@ const stubs = {
     DataTable: { props: ['value'], template: '<div class="dt"><slot v-if="!value.length" name="empty" /><span v-else class="rows">{{ value.length }}</span></div>' },
     Column: true,
     Tag: true,
+    Select: true,
     Paginator: true,
     IconField: { template: '<div><slot /></div>' },
     InputIcon: true,
@@ -28,7 +31,10 @@ const stubs = {
 const draft = { id_request: 'REQ-1', status: 'draft', nm_leave_type: 'Cuti Tahunan', start_date: '2026-11-18', end_date: '2026-11-20', total_days: 3, created_at: '2026-11-07' };
 
 describe('Pengajuan Cuti karyawan (audit-027)', () => {
-    beforeEach(() => vi.clearAllMocks());
+    beforeEach(() => {
+        vi.clearAllMocks();
+        route.query = {};
+    });
 
     it('#1 gagal muat tidak tampil sebagai "belum ada pengajuan"; Coba lagi memuat ulang', async () => {
         getMyLeaves.mockRejectedValueOnce(new Error('500'));
@@ -49,9 +55,38 @@ describe('Pengajuan Cuti karyawan (audit-027)', () => {
         getMyLeaves.mockResolvedValueOnce([draft]);
         const w = mount(LeaveHistory, { global: { stubs } });
         await flushPromises();
-        await w.findAll('button').find((b) => b.text() === 'Batalkan').trigger('click');
+        await w.findAll('button').find((b) => b.text() === 'Batalkan Draf').trigger('click');
         const opts = confirmRequire.mock.calls[0][0];
         expect(opts.defaultFocus).toBe('reject');
         expect(opts.icon).toBeUndefined();
+    });
+
+    it('A-F5 pembatalan draf jujur: draf tidak dihapus, tetap tampil Dibatalkan', async () => {
+        getMyLeaves.mockResolvedValueOnce([draft]);
+        const w = mount(LeaveHistory, { global: { stubs } });
+        await flushPromises();
+        await w.findAll('button').find((b) => b.text() === 'Batalkan Draf').trigger('click');
+        const opts = confirmRequire.mock.calls[0][0];
+        expect(opts.message).toContain('tidak dihapus');
+        expect(opts.acceptProps.label).toBe('Ya, Batalkan Draf');
+    });
+
+    it('A-F4 tautan /leave/edit/:id hanya membuka form untuk draf/dikembalikan milik sendiri', async () => {
+        const approved = { ...draft, id_request: 'REQ-2', status: 'approved' };
+        getMyLeaves.mockResolvedValue([draft, approved]);
+        const formStub = { props: ['visible', 'editId'], template: '<i class="form" :data-open="String(visible)" />' };
+        const open = async (id) => {
+            toastAdd.mockClear();
+            route.query = { editId: id };
+            const w = mount(LeaveHistory, { global: { stubs: { ...stubs, LeaveFormDialog: formStub } } });
+            await flushPromises();
+            return w.find('.form').attributes('data-open');
+        };
+        expect(await open('REQ-1')).toBe('true');
+        expect(toastAdd).not.toHaveBeenCalled();
+        for (const id of ['REQ-2', 'REQ-ORANG-LAIN']) {
+            expect(await open(id)).toBe('false');
+            expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ detail: 'Pengajuan tidak dapat diubah' }));
+        }
     });
 });

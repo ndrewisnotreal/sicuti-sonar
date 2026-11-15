@@ -10,7 +10,7 @@ import StatusHistoryDialog from '@/components/admin/StatusHistoryDialog.vue';
 import AccountFormDialog from '@/components/admin/AccountFormDialog.vue';
 import ResetPasswordDialog from '@/components/admin/ResetPasswordDialog.vue';
 import DeactivateAccountDialog from '@/components/admin/DeactivateAccountDialog.vue';
-import { PhPlus, PhPencilSimple, PhMagnifyingGlass, PhUserGear, PhKey, PhLockOpen, PhUserMinus, PhUserCheck, PhArrowsClockwise, PhClockCounterClockwise, PhSpinner } from '@phosphor-icons/vue';
+import { PhPlus, PhPencilSimple, PhMagnifyingGlass, PhUserGear, PhKey, PhLockOpen, PhUserMinus, PhUserCheck, PhArrowsClockwise, PhClockCounterClockwise, PhSpinner, PhDotsThree } from '@phosphor-icons/vue';
 
 const toast = useToast();
 const loading = ref(false);
@@ -72,7 +72,7 @@ const filteredUsers = computed(() => {
         if (targetDept && u.kd_dept !== targetDept) return false;
 
         if (searchQuery.value) {
-            const q = searchQuery.value.toLowerCase();
+            const q = searchQuery.value.trim().toLowerCase();
             const name = (u.nama || '').toLowerCase();
             const uname = (u.username || '').toLowerCase();
             const nik = (u.namecode || '').toLowerCase();
@@ -119,6 +119,27 @@ function openEdit(u) {
 function openResetPassword(u) {
     resetPasswordUser.value = u;
     resetPasswordVisible.value = true;
+}
+
+// Satu menu bersama untuk semua kartu HP; isinya diisi ulang sesuai akun yang dipilih.
+const rowMenu = ref(null);
+const rowMenuItems = ref([]);
+function openRowMenu(event, u) {
+    const items = [
+        { label: 'Atur ulang kata sandi', command: () => openResetPassword(u) },
+        { label: 'Riwayat status', command: () => openHistory(u) }
+    ];
+    if (u.is_locked) items.push({ separator: true }, { label: 'Buka kunci akun', command: () => unlockAccount(u) });
+    else if (!u.is_super) {
+        items.push(
+            { separator: true },
+            isActive(u)
+                ? { label: 'Nonaktifkan akun', class: 'menu-item-danger', command: () => toggleUserActive(u) }
+                : { label: 'Aktifkan akun', command: () => toggleUserActive(u) }
+        );
+    }
+    rowMenuItems.value = items;
+    rowMenu.value.toggle(event);
 }
 
 function openHistory(u) {
@@ -436,45 +457,24 @@ onMounted(() => {
                                 {{ statusSummary(u) }}
                             </button>
                             <!-- Anchor tour kolom Aksi juga di item pertama, karena header tabel tersembunyi di HP. -->
-                            <div class="grid grid-cols-2 gap-2 pt-1" :data-tour="i === 0 ? 'acc-col-aksi' : undefined">
-                                <Button severity="secondary" outlined size="small" class="text-xs !min-h-11 flex items-center justify-center gap-1.5" :aria-label="`Ubah akun ${displayName(u)}`" @click="openEdit(u)">
+                            <!-- Satu aksi utama + menu "Lainnya"; empat tombol penuh per kartu memanjangkan daftar dan menyamarkan aksi berbahaya (audit-013 #10). -->
+                            <div class="flex gap-2 pt-1" :data-tour="i === 0 ? 'acc-col-aksi' : undefined">
+                                <Button severity="secondary" outlined size="small" class="flex-1 text-xs !min-h-11 flex items-center justify-center gap-1.5" :aria-label="`Ubah akun ${displayName(u)}`" @click="openEdit(u)">
                                     <PhPencilSimple :size="14" weight="bold" aria-hidden="true" />
                                     <span>Ubah</span>
                                 </Button>
-                                <Button severity="secondary" outlined size="small" class="text-xs !min-h-11 flex items-center justify-center gap-1.5" :aria-label="`Atur ulang kata sandi ${displayName(u)}`" @click="openResetPassword(u)">
-                                    <PhKey :size="14" weight="bold" aria-hidden="true" />
-                                    <span>Kata sandi</span>
-                                </Button>
-                                <Button severity="secondary" outlined size="small" class="text-xs !min-h-11 flex items-center justify-center gap-1.5" :aria-label="`Riwayat status ${displayName(u)}`" @click="openHistory(u)">
-                                    <PhClockCounterClockwise :size="14" weight="bold" aria-hidden="true" />
-                                    <span>Riwayat</span>
-                                </Button>
                                 <Button
-                                    v-if="u.is_locked"
                                     severity="secondary"
                                     outlined
                                     size="small"
-                                    class="text-xs !min-h-11 flex items-center justify-center gap-1.5"
+                                    class="flex-1 text-xs !min-h-11 flex items-center justify-center gap-1.5"
                                     :loading="busyUid === u.uid_user_system"
-                                    :aria-label="`Buka kunci akun ${displayName(u)}`"
-                                    @click="unlockAccount(u)"
+                                    aria-haspopup="menu"
+                                    :aria-label="`Aksi lain untuk ${displayName(u)}`"
+                                    @click="openRowMenu($event, u)"
                                 >
-                                    <PhLockOpen :size="14" weight="bold" aria-hidden="true" />
-                                    <span>Buka kunci</span>
-                                </Button>
-                                <Button
-                                    v-else-if="!u.is_super"
-                                    severity="secondary"
-                                    outlined
-                                    size="small"
-                                    class="text-xs !min-h-11 flex items-center justify-center gap-1.5"
-                                    :loading="busyUid === u.uid_user_system"
-                                    :aria-label="`${isActive(u) ? 'Nonaktifkan' : 'Aktifkan'} akun ${displayName(u)}`"
-                                    @click="toggleUserActive(u)"
-                                >
-                                    <PhUserMinus v-if="isActive(u)" :size="14" weight="bold" aria-hidden="true" />
-                                    <PhUserCheck v-else :size="14" weight="bold" aria-hidden="true" />
-                                    <span>{{ isActive(u) ? 'Nonaktifkan' : 'Aktifkan' }}</span>
+                                    <PhDotsThree :size="16" weight="bold" aria-hidden="true" />
+                                    <span>Lainnya</span>
                                 </Button>
                             </div>
                         </li>
@@ -488,6 +488,7 @@ onMounted(() => {
                         class="w-full mt-2 text-xs !min-h-11"
                         @click="mobileLimit += 10"
                     />
+                    <Menu ref="rowMenu" :model="rowMenuItems" popup />
                 </div>
             </div>
         </div>

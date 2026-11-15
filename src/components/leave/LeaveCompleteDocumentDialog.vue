@@ -2,7 +2,7 @@
 import { ref, watch } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { leaveService } from '@/service/leaveService';
-import { formatDate } from '@/service/sicutiService';
+import { formatDate, syncFromBackend } from '@/service/sicutiService';
 import { PhFileArrowUp } from '@phosphor-icons/vue';
 
 const props = defineProps({
@@ -54,6 +54,7 @@ async function submitDocument() {
     try {
         const id = props.request.id_request || props.request.id;
         await leaveService.completeDocument(id, docFile.value);
+        void syncFromBackend({ fresh: true });
         toast.add({
             severity: 'success',
             summary: 'Dokumen Terkirim',

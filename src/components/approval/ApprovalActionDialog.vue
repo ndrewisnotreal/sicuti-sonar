@@ -1,7 +1,8 @@
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue';
+import { leaveService } from '@/service/leaveService';
 import { approvalService } from '@/service/approvalService';
-import { formatDate, attachmentInfo, documentPending } from '@/service/sicutiService';
+import { formatDate, attachmentInfo, documentPending, syncFromBackend } from '@/service/sicutiService';
 import LeaveAttachment from '@/components/leave/LeaveAttachment.vue';
 import TourHelpButton from '@/components/common/TourHelpButton.vue';
 import { useToast } from 'primevue/usetoast';
@@ -25,6 +26,8 @@ const waitingDocument = computed(() => documentPending(activeRequest.value));
 const isProcessing = ref(false);
 const approvalNotes = ref('');
 const notesError = ref('');
+// Daftar pending-approval hanya membawa substitute_id; nama pengganti diambil dari detail (sama seperti panel detail).
+const substituteName = ref('');
 
 watch(
     () => props.visible,
@@ -38,6 +41,22 @@ watch(
 watch(approvalNotes, (v) => {
     if (v.trim()) notesError.value = '';
 });
+watch(
+    () => [props.visible, props.request],
+    async ([open, req]) => {
+        substituteName.value = req?.substitute_name || '';
+        const id = req?.id_request || req?.id;
+        if (!open || !id || !req.substitute_id || substituteName.value) return;
+        try {
+            const detail = await leaveService.getLeaveDetail(id);
+            // Abaikan jawaban terlambat bila dialog sudah pindah ke pengajuan lain.
+            if ((props.request?.id_request || props.request?.id) === id) substituteName.value = detail?.substitute_name || '';
+        } catch {
+            // Pengganti tugas hanya informasi tambahan; tanpa detail baris disembunyikan.
+        }
+    },
+    { immediate: true }
+);
 
 // Satu tanggal untuk cuti satu hari (audit-029 #15).
 const singleDay = computed(() => {
@@ -78,6 +97,7 @@ async function processAction(actionType, idReq) {
             action: actionType,
             notes: approvalNotes.value.trim()
         });
+        void syncFromBackend({ fresh: true });
 
         const actionText = actionType === 'approve' ? 'disetujui' : (actionType === 'reject' ? 'ditolak' : 'dikembalikan');
         toast.add({
@@ -152,6 +172,10 @@ async function processAction(actionType, idReq) {
                                 <span>{{ formatDate(activeRequest.end_date || activeRequest.endDate) }}</span>
                             </template>
                         </div>
+                    </div>
+                    <div v-if="substituteName" class="sm:col-span-2">
+                        <span class="text-muted-color block mb-1">Pengganti Tugas</span>
+                        <div class="font-medium text-surface-800 dark:text-surface-200">{{ substituteName }}</div>
                     </div>
                     <div v-if="activeAttachment || waitingDocument" data-tour="action-attachment" class="sm:col-span-2 pt-0.5">
                         <span class="text-muted-color block mb-1">Dokumen Lampiran</span>
@@ -237,6 +261,8 @@ async function processAction(actionType, idReq) {
                     <PhCheck :size="16" weight="bold" aria-hidden="true" class="shrink-0" />
                     <span>Setujui Permohonan</span>
                 </Button>
+                <!-- Tooltip tidak muncul saat disentuh; di HP alasannya ditulis di bawah tombol (audit-013 #14). -->
+                <p v-if="waitingDocument" class="lg:hidden w-full text-xs leading-snug text-(--status-warn-fg)">Setujui belum bisa dipilih: menunggu dokumen pendukung dari pemohon.</p>
             </div>
         </template>
     </Dialog>

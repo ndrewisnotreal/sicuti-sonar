@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch, nextTick, onMounted } from 'vue';
 import { adminService } from '@/service/adminService';
 import { isSuperAdmin, can, syncFromBackend } from '@/service/sicutiService';
 import { useToast } from 'primevue/usetoast';
@@ -15,6 +15,25 @@ const form = ref({ annual_quota: null, max_carry_over: null, carry_over_expiry_m
 
 const canManage = computed(() => isSuperAdmin() || can('master_data.manage_policy'));
 const isDirty = computed(() => saved.value !== null && JSON.stringify(form.value) !== JSON.stringify(saved.value));
+
+const NUMERIC_FIELDS = [
+    { key: 'annual_quota', id: 'policy-quota', label: 'Kuota tahunan', unit: 'hari', min: 1, max: 365 },
+    { key: 'max_carry_over', id: 'policy-carry', label: 'Maks carry over', unit: 'hari', min: 0, max: 365 },
+    { key: 'carry_over_expiry_months', id: 'policy-expiry', label: 'Masa berlaku carry over', unit: 'bulan', min: 0, max: 24 }
+];
+// Pesan tampil di bawah field setelah Simpan ditekan; hilang begitu field diubah.
+const errors = ref({});
+NUMERIC_FIELDS.forEach((f) => watch(() => form.value[f.key], () => delete errors.value[f.key]));
+
+function validate() {
+    errors.value = {};
+    for (const f of NUMERIC_FIELDS) {
+        const v = form.value[f.key];
+        if (v === null || v === undefined || v === '') errors.value[f.key] = `${f.label} wajib diisi.`;
+        else if (v < f.min || v > f.max) errors.value[f.key] = `${f.label} harus antara ${f.min} dan ${f.max} ${f.unit}.`;
+    }
+    return !Object.keys(errors.value).length;
+}
 
 function fromPolicy(p) {
     return {
@@ -41,12 +60,17 @@ async function load() {
 }
 
 async function save() {
+    if (!validate()) {
+        await nextTick();
+        document.getElementById(NUMERIC_FIELDS.find((f) => errors.value[f.key]).id)?.focus();
+        return;
+    }
     saving.value = true;
     try {
         const res = await adminService.updatePolicy({ ...form.value });
         form.value = fromPolicy(res?.data ?? res);
         saved.value = { ...form.value };
-        await syncFromBackend();
+        await syncFromBackend({ fresh: true });
         toast.add({ severity: 'success', summary: 'Kebijakan disimpan', detail: 'Kebijakan cuti sudah diperbarui.', life: 3000 });
     } catch (err) {
         toast.add({ severity: 'error', summary: 'Kebijakan gagal disimpan', detail: err.message, life: 4000 });
@@ -76,26 +100,22 @@ onMounted(load);
             </div>
 
             <div data-tour="policy-fields" class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-5">
-                <div>
-                    <label for="policy-quota" class="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Kuota tahunan</label>
+                <div v-for="f in NUMERIC_FIELDS" :key="f.key">
+                    <label :for="f.id" class="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">{{ f.label }} <span v-if="canManage" class="text-(--status-danger-fg)" aria-hidden="true">*</span></label>
                     <InputGroup>
-                        <InputNumber v-model="form.annual_quota" inputId="policy-quota" :min="1" :max="365" :disabled="!canManage || loading || loadError" fluid />
-                        <InputGroupAddon class="!text-surface-600 dark:!text-surface-400">hari</InputGroupAddon>
+                        <InputNumber
+                            v-model="form[f.key]"
+                            :inputId="f.id"
+                            :min="f.min"
+                            :max="f.max"
+                            :invalid="!!errors[f.key]"
+                            :aria-describedby="errors[f.key] ? `${f.id}-error` : undefined"
+                            :disabled="!canManage || loading || loadError"
+                            fluid
+                        />
+                        <InputGroupAddon class="!text-surface-600 dark:!text-surface-400">{{ f.unit }}</InputGroupAddon>
                     </InputGroup>
-                </div>
-                <div>
-                    <label for="policy-carry" class="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Maks carry over</label>
-                    <InputGroup>
-                        <InputNumber v-model="form.max_carry_over" inputId="policy-carry" :min="0" :max="365" :disabled="!canManage || loading || loadError" fluid />
-                        <InputGroupAddon class="!text-surface-600 dark:!text-surface-400">hari</InputGroupAddon>
-                    </InputGroup>
-                </div>
-                <div>
-                    <label for="policy-expiry" class="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Masa berlaku carry over</label>
-                    <InputGroup>
-                        <InputNumber v-model="form.carry_over_expiry_months" inputId="policy-expiry" :min="0" :max="24" :disabled="!canManage || loading || loadError" fluid />
-                        <InputGroupAddon class="!text-surface-600 dark:!text-surface-400">bulan</InputGroupAddon>
-                    </InputGroup>
+                    <p v-if="errors[f.key]" :id="`${f.id}-error`" class="mt-1 text-xs text-(--status-danger-fg)">{{ errors[f.key] }}</p>
                 </div>
                 <div class="sm:col-span-3">
                     <label for="policy-desc" class="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Deskripsi</label>

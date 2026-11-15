@@ -268,8 +268,8 @@ export const TOUR_STEPS = {
         },
         {
             element: 'export-excel',
-            title: 'Ekspor CSV',
-            text: 'Unduh tab yang sedang dibuka beserta filter yang terlihat, dalam format CSV yang bisa dibuka di Excel.'
+            title: 'Ekspor Excel',
+            text: 'Unduh tab yang sedang dibuka beserta filter yang terlihat, sebagai berkas Excel (.xlsx).'
         }
     ],
     'admin.audit': [

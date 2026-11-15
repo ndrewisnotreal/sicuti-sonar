@@ -58,7 +58,7 @@ function deleteHoliday(item) {
         accept: async () => {
             try {
                 await adminService.deleteHoliday(item.id);
-                await syncFromBackend();
+                await syncFromBackend({ fresh: true });
                 toast.add({ severity: 'info', summary: 'Dihapus', detail: `Hari libur ${item.name} telah dihapus`, life: 3000 });
             } catch (err) {
                 toast.add({ severity: 'error', summary: 'Hari libur gagal dihapus', detail: err.message, life: 4000 });
@@ -109,7 +109,36 @@ function deleteHoliday(item) {
                     <span>Libur Nasional <strong class="text-surface-900 dark:text-surface-0 tabular-nums">{{ holidayCounts.national }}</strong></span>
                     <span>Cuti Bersama <strong class="text-surface-900 dark:text-surface-0 tabular-nums">{{ holidayCounts.collective }}</strong></span>
                 </p>
-                <DataTable :value="sicutiState.holidays" paginator :rows="10" class="p-datatable-sm text-sm" responsiveLayout="scroll">
+                <!-- Di bawah md kolom Aksi terpotong di tepi layar; daftar memuat isi yang sama (audit-013 #5). -->
+                <p v-if="!sicutiState.holidays?.length" class="md:hidden py-8 text-center text-sm text-muted-color">Belum ada hari libur tahun {{ CURRENT_YEAR }}.</p>
+                <ul v-else class="md:hidden divide-y divide-surface-200 dark:divide-surface-700 border-t border-surface-200 dark:border-surface-700">
+                    <li v-for="(data, i) in sicutiState.holidays" :key="data.id || `${data.date}-${data.name}`" class="py-3 flex items-start justify-between gap-3">
+                        <div class="min-w-0 space-y-1">
+                            <div class="font-semibold text-sm text-surface-900 dark:text-surface-100">{{ data.name }}</div>
+                            <div class="text-xs text-surface-700 dark:text-surface-300 tabular-nums">{{ data.date ? dateLabel(data) : '-' }}</div>
+                            <Tag :value="data.type === 'national' ? 'Libur Nasional' : 'Cuti Bersama'" :severity="data.type === 'national' ? 'danger' : 'warn'" :data-tour="i === 0 ? 'hol-col-type' : undefined" />
+                        </div>
+                        <div v-if="canManage" class="flex items-center gap-1 shrink-0">
+                            <button
+                                type="button"
+                                class="w-11 h-11 flex items-center justify-center text-surface-500 rounded-border cursor-pointer"
+                                :aria-label="`Ubah ${data.name}`"
+                                @click="openEdit(data)"
+                            >
+                                <PhPencilSimple :size="16" weight="bold" aria-hidden="true" />
+                            </button>
+                            <button
+                                type="button"
+                                class="w-11 h-11 flex items-center justify-center text-rose-600 dark:text-rose-400 rounded-border cursor-pointer"
+                                :aria-label="`Hapus ${data.name}`"
+                                @click="deleteHoliday(data)"
+                            >
+                                <PhTrash :size="16" weight="bold" aria-hidden="true" />
+                            </button>
+                        </div>
+                    </li>
+                </ul>
+                <DataTable :value="sicutiState.holidays" paginator :rows="10" class="hidden md:block p-datatable-sm text-sm" responsiveLayout="scroll">
                     <template #empty>
                         <div class="text-center py-8 text-muted-color">Belum ada hari libur tahun {{ CURRENT_YEAR }}.</div>
                     </template>

@@ -205,6 +205,12 @@ async function handleSave() {
         emit('saved');
         closeDialog();
     } catch (err) {
+        if (err.status === 409) {
+            errors.value.code = `Kode "${form.value.code.trim()}" sudah dipakai jenis cuti lain.`;
+            await nextTick();
+            document.getElementById('lt-code')?.focus();
+            return;
+        }
         toast.add({ severity: 'error', summary: 'Jenis cuti gagal disimpan', detail: err.message, life: 4000 });
     } finally {
         saving.value = false;

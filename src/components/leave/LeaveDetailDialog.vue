@@ -16,7 +16,7 @@ import LeaveApprovalTimeline from '@/components/leave/LeaveApprovalTimeline.vue'
 import TourHelpButton from '@/components/common/TourHelpButton.vue';
 import { useToast } from 'primevue/usetoast';
 import { localIsoDate } from '@/utils/onLeaveToday';
-import { buildLeaveFormHtml, validationUrl, isQrReachableFromPhone } from '@/utils/leaveFormPrint';
+import { buildLeaveFormHtml, validationUrl, isQrReachableFromPhone, pickBalanceForLeave } from '@/utils/leaveFormPrint';
 import {
     PhPrinter,
     PhCopy,
@@ -176,9 +176,10 @@ async function printDocument() {
     const atasan = approvers[0];
     const mengetahui = approvers[approvers.length - 1];
 
+    // Periode saldo bergeser dari tahun kalender (mis. 5 Feb–4 Feb): cuti Jan 2027 dipotong dari baris periode 2026.
     const year = Number(String(startDate.value || '').slice(0, 4)) || new Date().getFullYear();
-    const balances = await leaveService.getBalances({ uid: requesterUid, year }).catch(() => []);
-    const balance = balances.find((b) => Number(b.year) === year) || balances[0] || null;
+    const rows = await Promise.all([year, year - 1].map((y) => leaveService.getBalances({ uid: requesterUid, year: y }).catch(() => [])));
+    const balance = pickBalanceForLeave(rows.flat(), startDate.value);
 
     const signerOf = (step) =>
         step

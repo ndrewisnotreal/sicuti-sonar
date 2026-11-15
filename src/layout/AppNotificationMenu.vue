@@ -1,8 +1,8 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '@/service/api';
-import { currentUser, sicutiState, appMode, formatTimeAgo, isAdmin, isApprover, refreshPendingApprovalCount } from '@/service/sicutiService';
+import { currentUser, sicutiState, formatTimeAgo, isAdmin, isApprover, refreshPendingApprovalCount } from '@/service/sicutiService';
 import LeaveDetailDialog from '@/components/leave/LeaveDetailDialog.vue';
 import AppNotificationItem from '@/layout/AppNotificationItem.vue';
 import {
@@ -15,6 +15,8 @@ import {
 const router = useRouter();
 
 const notifOpen = ref(false);
+const bellRef = ref(null);
+const panelRef = ref(null);
 const notifTab = ref('all');
 const selectedRequest = ref(null);
 const isDetailDialogVisible = ref(false);
@@ -89,16 +91,21 @@ const displayedNotifications = computed(() => {
 });
 
 function onKeydown(e) {
-    if (e.key === 'Escape' && notifOpen.value) closeNotif();
+    if (e.key === 'Escape' && notifOpen.value) closeNotif({ restoreFocus: true });
 }
 
 function toggleNotif() {
     notifOpen.value = !notifOpen.value;
-    if (notifOpen.value) loadNotifications();
+    if (notifOpen.value) {
+        loadNotifications();
+        nextTick(() => panelRef.value?.focus());
+    }
 }
 
-function closeNotif() {
+// Fokus kembali ke tombol lonceng hanya bila ditutup lewat keyboard/penutupan eksplisit, bukan saat navigasi (D-F3).
+function closeNotif({ restoreFocus = false } = {}) {
     notifOpen.value = false;
+    if (restoreFocus) nextTick(() => bellRef.value?.focus());
 }
 
 function handleMarkAllRead() {
@@ -128,17 +135,16 @@ function handleNotifClick(notif) {
     closeNotif();
 
     if (notif.group === 'pending') {
-        appMode.value = 'approval';
-        router.push('/approval/pending');
+        router.push({ path: '/approval/pending', query: notif.requestId ? { detailId: notif.requestId } : {} });
         return;
     }
     if (notif.type === 'leave_new') {
-        router.push('/admin/monitoring');
+        router.push({ path: '/admin/monitoring', query: notif.requestId ? { detailId: notif.requestId } : {} });
         return;
     }
-    const req = notif.requestId && sicutiState.leaveRequests.find((r) => r.id === notif.requestId);
-    if (req) {
-        selectedRequest.value = req;
+    if (notif.requestId) {
+        // Approver tidak punya pengajuan orang lain di state; dialog mengambil detail lengkap sendiri lewat id.
+        selectedRequest.value = sicutiState.leaveRequests.find((r) => r.id === notif.requestId) || { id: notif.requestId };
         isDetailDialogVisible.value = true;
         return;
     }
@@ -170,6 +176,7 @@ function navigateFooter() {
 <template>
     <div class="relative">
         <button
+            ref="bellRef"
             type="button"
             data-tour="notifications"
             @click="toggleNotif"
@@ -188,9 +195,11 @@ function navigateFooter() {
 
         <div
             v-if="notifOpen"
+            ref="panelRef"
+            tabindex="-1"
             role="dialog"
             aria-label="Notifikasi"
-            class="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 top-16 sm:top-full mt-2 w-auto sm:w-[380px] bg-surface-0 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl shadow-xl z-50 overflow-hidden flex flex-col"
+            class="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 top-16 sm:top-full mt-2 w-auto sm:w-[380px] bg-surface-0 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl shadow-xl z-50 overflow-hidden flex flex-col focus:outline-none"
         >
             <div class="px-4 py-3 border-b border-surface-100 dark:border-surface-800 flex items-center justify-between bg-surface-50/60 dark:bg-surface-800/30">
                 <div class="flex items-center gap-2">
@@ -216,7 +225,7 @@ function navigateFooter() {
                     </button>
                     <button
                         type="button"
-                        @click="closeNotif"
+                        @click="closeNotif({ restoreFocus: true })"
                         class="w-7 h-7 flex items-center justify-center rounded-md text-surface-400 hover:text-surface-600 dark:hover:text-surface-200 hover:bg-surface-100 dark:hover:bg-surface-800 cursor-pointer text-xs"
                         aria-label="Tutup panel notifikasi"
                     >
@@ -255,7 +264,7 @@ function navigateFooter() {
                     Belum Dibaca ({{ unreadCount }})
                 </button>
             </div>
-            <div class="max-h-[380px] overflow-y-auto divide-y divide-surface-100 dark:divide-surface-800/60">
+            <div class="max-h-[380px] overflow-y-auto overscroll-contain divide-y divide-surface-100 dark:divide-surface-800/60">
                 <div v-if="displayedNotifications.length === 0" class="py-10 px-4 text-center">
                     <div class="w-10 h-10 rounded-full bg-surface-100 dark:bg-surface-800 flex items-center justify-center mx-auto mb-2.5 text-surface-400">
                         <PhTray :size="22" weight="regular" aria-hidden="true" />

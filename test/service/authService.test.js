@@ -36,6 +36,13 @@ describe('authService menu & izin', () => {
         expect(api.get).not.toHaveBeenCalled();
     });
 
+    it('login: username di-trim, password dikirim apa adanya (backend meng-hash password termasuk spasi)', async () => {
+        const { api, authService } = await freshModules();
+        api.post.mockResolvedValue(LOGIN_RES);
+        await authService.login('  OS24980032 ', ' Rahasia1! ');
+        expect(api.post).toHaveBeenCalledWith('/auth/authorize', { username: 'OS24980032', password: ' Rahasia1! ' });
+    });
+
     it('getMenu tepat setelah login memakai data login (tidak meminta ulang), kecuali dipaksa', async () => {
         const { api, authService } = await freshModules();
         api.post.mockResolvedValue(LOGIN_RES);

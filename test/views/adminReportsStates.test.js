@@ -19,7 +19,8 @@ vi.mock('@/utils/reportExport', () => ({ downloadExcel: (...a) => downloadExcel(
 vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: toastAdd }) }));
 
 import AdminReports from '@/views/admin/AdminReports.vue';
-import { currentUser } from '@/service/sicutiService';
+import { currentUser, CURRENT_YEAR } from '@/service/sicutiService';
+import DateRangeFilter from '@/components/common/DateRangeFilter.vue';
 
 const TabsStub = { name: 'Tabs', props: ['value'], emits: ['update:value'], template: '<div><slot /></div>' };
 const table = (cls) => ({ props: ['items', 'emptyText', 'loadError'], template: `<div class="${cls}">{{ items.length }}|{{ emptyText }}</div>` });
@@ -50,7 +51,7 @@ function okData() {
     svc.getDepartments.mockResolvedValue([]);
     apiGet.mockResolvedValue({ data: summary });
 }
-const exportBtn = (w) => w.findAll('button').find((b) => b.text().includes('Ekspor CSV'));
+const exportBtn = (w) => w.findAll('button').find((b) => b.text().includes('Ekspor Excel'));
 
 describe('Laporan (audit-022)', () => {
     beforeEach(() => {
@@ -98,7 +99,7 @@ describe('Laporan (audit-022)', () => {
         expect(params.type).toBe('leave-type-summary');
         expect(params).not.toHaveProperty('search');
         expect(params).not.toHaveProperty('status');
-        expect(filename.endsWith('.csv')).toBe(true);
+        expect(filename.endsWith('.xlsx')).toBe(true);
     });
 
     it('#3 ekspor 0 baris ditolak', async () => {
@@ -110,5 +111,30 @@ describe('Laporan (audit-022)', () => {
         await exportBtn(w).trigger('click');
         expect(downloadExcel).not.toHaveBeenCalled();
         expect(toastAdd).toHaveBeenLastCalledWith(expect.objectContaining({ summary: 'Tidak ada data' }));
+    });
+    it('C-F4 opsi Tahun menyertakan tahun depan dan data dimuat per tahun terpilih', async () => {
+        okData();
+        const SelectStub = { name: 'Select', props: ['options', 'ariaLabelledby'], template: '<div />' };
+        const w = mount(AdminReports, { global: { stubs: { ...stubs, Select: SelectStub } } });
+        await flushPromises();
+        const year = w.findAllComponents(SelectStub).find((c) => c.props('ariaLabelledby') === 'rep-year-label');
+        expect(year.props('options').map((o) => o.value)).toEqual([CURRENT_YEAR + 1, CURRENT_YEAR, CURRENT_YEAR - 1]);
+        expect(svc.getLeaveRequests).toHaveBeenLastCalledWith({ year: CURRENT_YEAR });
+    });
+
+    it('C-F4 rentang tanggal memuat pengajuan tanpa batas tahun dan ekspor tidak membawa year', async () => {
+        okData();
+        const next = String(CURRENT_YEAR + 1);
+        svc.getLeaveRequests.mockResolvedValue([{ ...request, start_date: next + '-01-13', end_date: next + '-01-14' }]);
+        const w = mount(AdminReports, { global: { stubs } });
+        await flushPromises();
+        w.findComponent(DateRangeFilter).vm.$emit('update:modelValue', [new Date(CURRENT_YEAR + 1, 0, 1), new Date(CURRENT_YEAR + 1, 3, 28)]);
+        await flushPromises();
+        expect(svc.getLeaveRequests).toHaveBeenLastCalledWith({ year: undefined });
+        expect(apiGet).toHaveBeenLastCalledWith('/sicuti/report/leave-type-summary', expect.objectContaining({ year: undefined, start_date: `${CURRENT_YEAR + 1}-01-01` }));
+
+        await exportBtn(w).trigger('click');
+        await flushPromises();
+        expect(downloadExcel.mock.calls[0][1]).toMatchObject({ type: 'leave-request', year: undefined, start_date: `${CURRENT_YEAR + 1}-01-01` });
     });
 });
