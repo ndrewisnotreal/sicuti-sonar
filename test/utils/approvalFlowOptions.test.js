@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { approverChoices, defaultApprovers, flowFormProblem, memberChoices } from '@/utils/approvalFlowOptions';
+import { approverChoices, defaultApprovers, flowFormProblems, memberChoices } from '@/utils/approvalFlowOptions';
 
 const ELIGIBLE = [
     { uid_user_system: 'USR001', nama: 'Mawan', kd_role: 'pic_approval', nm_role: 'PIC Approval', kd_dept: 'SIT' },
@@ -57,16 +57,15 @@ describe('memberChoices (dialog Tambah Anggota)', () => {
     });
 });
 
-describe('flowFormProblem (validasi dialog tingkat)', () => {
-    it('tambah tingkat: peran dan approver wajib', () => {
-        expect(flowFormProblem({ id_flow: '', assigned_role: '', users: [] })).toBe('Pilih peran untuk tingkat ini');
-        expect(flowFormProblem({ id_flow: '', assigned_role: 'kepala_it', users: [] })).toBe('Pilih minimal satu approver untuk tingkat baru');
-        expect(flowFormProblem({ id_flow: '', assigned_role: 'kepala_it', users: ['USR007'] })).toBeNull();
-    });
-
-    it('ubah tingkat: approver boleh kosong, peran tetap wajib', () => {
-        expect(flowFormProblem({ id_flow: 'AF1', assigned_role: 'kepala_it', users: [] })).toBeNull();
-        expect(flowFormProblem({ id_flow: 'AF1', assigned_role: '', users: ['USR007'] })).toBe('Pilih peran untuk tingkat ini');
+describe('flowFormProblems (validasi dialog tingkat)', () => {
+    it('peran dan approver wajib, keduanya dilaporkan sekaligus, di mode Tambah maupun Ubah', () => {
+        expect(flowFormProblems({ id_flow: '', assigned_role: '', users: [] })).toEqual({
+            role: 'Pilih peran untuk tingkat ini.',
+            users: 'Pilih minimal satu approver untuk tingkat ini.'
+        });
+        expect(flowFormProblems({ id_flow: 'AF1', assigned_role: 'kepala_it', users: [] })).toEqual({ role: '', users: 'Pilih minimal satu approver untuk tingkat ini.' });
+        expect(flowFormProblems({ id_flow: 'AF1', assigned_role: '', users: ['USR007'] })).toEqual({ role: 'Pilih peran untuk tingkat ini.', users: '' });
+        expect(flowFormProblems({ id_flow: '', assigned_role: 'kepala_it', users: ['USR007'] })).toEqual({ role: '', users: '' });
     });
 });
 

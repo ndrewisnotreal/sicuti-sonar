@@ -2,7 +2,7 @@
 import { ref, computed, watch, nextTick } from 'vue';
 import { adminService } from '@/service/adminService';
 import { useToast } from 'primevue/usetoast';
-import { approverChoices, defaultApprovers, flowFormProblem } from '@/utils/approvalFlowOptions';
+import { approverChoices, defaultApprovers, flowFormProblems } from '@/utils/approvalFlowOptions';
 
 const props = defineProps({
     visible: {
@@ -40,10 +40,15 @@ const toast = useToast();
 
 const flowForm = ref({ id_flow: '', assigned_role: '', users: [] });
 const savingFlow = ref(false);
-// Pesan flowFormProblem ditampilkan di bawah field yang bersangkutan (audit-015 #5).
+// Pesan validasi ditampilkan di bawah field yang bersangkutan (audit-015 #5).
 const errors = ref({ role: '', users: '' });
 watch(() => flowForm.value.assigned_role, () => (errors.value.role = ''));
 watch(() => flowForm.value.users, () => (errors.value.users = ''));
+// Jumlah approver yang diisi otomatis dari peran; hilang saat pengguna mengubah pilihan sendiri.
+const autoFilled = ref(0);
+function onApproversChange() {
+    autoFilled.value = 0;
+}
 
 const isEditing = computed(() => Boolean(flowForm.value.id_flow));
 
@@ -66,6 +71,7 @@ watch(
     (isOpen) => {
         if (!isOpen) return;
         errors.value = { role: '', users: '' };
+        autoFilled.value = 0;
         if (props.flowData) {
             flowForm.value = {
                 id_flow: props.flowData.id_flow || '',
@@ -84,17 +90,18 @@ watch(
 
 function onFlowRoleChange(kdRole) {
     if (flowForm.value.id_flow) return;
-    flowForm.value.users = defaultApprovers(props.eligibleApprovers || [], props.flows || [], kdRole, props.templateDept);
+    const picked = defaultApprovers(props.eligibleApprovers || [], props.flows || [], kdRole, props.templateDept);
+    flowForm.value.users = picked;
+    autoFilled.value = picked.length;
 }
 
 async function saveFlow() {
-    const problem = flowFormProblem(flowForm.value);
-    if (problem) {
-        const onRole = !flowForm.value.assigned_role;
-        errors.value = { role: onRole ? problem + '.' : '', users: onRole ? '' : problem + '.' };
+    const problems = flowFormProblems(flowForm.value);
+    if (problems.role || problems.users) {
+        errors.value = problems;
         await nextTick();
         // Select/MultiSelect PrimeVue: fokus ke elemen combobox di dalam wrapper.
-        document.querySelector(onRole ? '[aria-labelledby="flow-role-label"]' : '#flow-approvers')?.focus();
+        document.querySelector(problems.role ? '[aria-labelledby="flow-role-label"]' : '#flow-approvers')?.focus();
         return;
     }
     savingFlow.value = true;
@@ -146,7 +153,7 @@ async function saveFlow() {
                 Peran menjadi nama tingkat.{{ isEditing ? '' : ' Tingkat baru ditaruh paling akhir; geser untuk mengubah urutan.' }}
             </p>
 
-            <label for="flow-approvers" class="block font-medium mb-1 pt-2">Approver{{ isEditing ? '' : ' *' }}</label>
+            <label for="flow-approvers" class="block font-medium mb-1 pt-2">Approver *</label>
             <MultiSelect
                 v-model="flowForm.users"
                 inputId="flow-approvers"
@@ -160,11 +167,15 @@ async function saveFlow() {
                 placeholder="Pilih akun approver"
                 emptyMessage="Belum ada akun yang punya izin approve"
                 emptyFilterMessage="Tidak ada akun yang cocok"
-                class="w-full text-xs"
+                class="w-full text-xs [&_.p-multiselect-label]:!flex-wrap [&_.p-multiselect-label]:!whitespace-normal [&_.p-multiselect-label]:gap-1"
                 :invalid="!!errors.users"
                 :aria-describedby="errors.users ? 'flow-approvers-error' : undefined"
+                @change="onApproversChange"
             />
             <p v-if="errors.users" id="flow-approvers-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ errors.users }}</p>
+            <p v-if="autoFilled" class="text-xs text-muted-color" role="status">
+                {{ autoFilled }} akun berperan ini terisi otomatis sebagai approver. Hapus yang tidak diperlukan sebelum menyimpan.
+            </p>
             <p class="text-xs text-muted-color">
                 Akun dari departemen templat yang perannya punya izin Approve/Reject atau Validasi; cukup salah satu yang menyetujui. Satu akun hanya di satu tingkat per templat.
             </p>

@@ -33,6 +33,53 @@ describe('syncFromBackend', () => {
         expect(calls(api, '/sicuti/policy')).toHaveLength(1);
     });
 
+    it('{ fresh: true } saat sinkron masih berjalan menunggu satu sinkron baru, agar data hasil penulisan ikut terambil', async () => {
+        const { api, svc } = await freshModules();
+        const running = svc.syncFromBackend();
+        const afterWrite = svc.syncFromBackend({ fresh: true });
+        const alsoAfterWrite = svc.syncFromBackend({ fresh: true });
+        expect(afterWrite).toBe(alsoAfterWrite);
+        await Promise.all([running, afterWrite]);
+        expect(calls(api, '/sicuti/leave-request')).toHaveLength(2);
+    });
+
+    it('hasil sinkron yang selesai setelah logout dibuang', async () => {
+        const { api, svc } = await freshModules();
+        let release;
+        api.get.mockImplementation(async (url) => {
+            if (url === '/sicuti/leave-request') {
+                await new Promise((resolve) => {
+                    release = resolve;
+                });
+                return { data: { data: [{ id_request: 'MILIK-SESI-LAMA' }], total: 1 } };
+            }
+            return url === '/auth/menu' ? { data: { menu: [], abilities: [] } } : { data: [] };
+        });
+        const pending = svc.syncFromBackend();
+        svc.logout();
+        release();
+        await pending;
+        expect(svc.sicutiState.leaveRequests).toEqual([]);
+        expect(svc.sicutiState.syncStatus).toBe('idle');
+    });
+
+    it('logout mengosongkan data per pengguna agar pengguna berikutnya tidak melihatnya (qa-browser Q4)', async () => {
+        const { api, svc } = await freshModules();
+        api.get.mockImplementation(async (url) => {
+            if (url === '/sicuti/leave-request') return { data: { data: [{ id_request: 'MILIK-A', uid_user_system: 'USR101' }], total: 1 } };
+            return url === '/auth/menu' ? { data: { menu: [], abilities: [] } } : { data: [] };
+        });
+        await svc.syncFromBackend();
+        svc.setPendingApprovalCount(2);
+        expect(svc.sicutiState.leaveRequests).toHaveLength(1);
+
+        svc.logout();
+        expect(svc.sicutiState.leaveRequests).toEqual([]);
+        expect(svc.sicutiState.users).toEqual([]);
+        expect(svc.sicutiState.leaveBalances).toEqual([]);
+        expect(svc.sicutiState.pendingApprovalCount).toBe(0);
+    });
+
     it('saldo & hari libur diminta untuk tahun berjalan (URL sama dengan halaman, bisa digabung)', async () => {
         const { api, svc } = await freshModules();
         await svc.syncFromBackend();

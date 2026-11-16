@@ -41,8 +41,10 @@ export function memberChoices(candidates, templateDept) {
     });
 }
 
-export function flowFormProblem(form) {
-    if (!form?.assigned_role) return 'Pilih peran untuk tingkat ini';
-    if (!form.id_flow && !(form.users || []).length) return 'Pilih minimal satu approver untuk tingkat baru';
-    return null;
+// Peran dan approver sama-sama wajib, di mode Tambah maupun Ubah (tingkat tanpa approver tidak bisa memproses apa pun).
+export function flowFormProblems(form) {
+    return {
+        role: form?.assigned_role ? '' : 'Pilih peran untuk tingkat ini.',
+        users: (form?.users || []).length ? '' : 'Pilih minimal satu approver untuk tingkat ini.'
+    };
 }

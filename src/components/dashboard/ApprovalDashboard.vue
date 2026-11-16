@@ -351,7 +351,8 @@ function openApprovalModal(req) {
             </div>
 
             <div class="mt-4 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-                <div class="w-full sm:w-72">
+                <!-- Antrean kosong: di HP kolom cari disembunyikan karena tidak ada yang bisa dicari; Segarkan tetap ada (audit-013 #17). -->
+                <div class="w-full sm:w-72" :class="{ 'max-lg:hidden': !firstLoad && !pendingFailed && !pendingRequests.length }">
                     <label for="cari-antrean-dashboard" class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1">Cari</label>
                     <IconField iconPosition="left" class="w-full">
                         <InputIcon class="!flex items-center justify-center">

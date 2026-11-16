@@ -1,6 +1,7 @@
 import AppLayout from '@/layout/AppLayout.vue';
 import { createRouter, createWebHistory } from 'vue-router';
 import { currentUser, isAdmin, isSuperAdmin, isApprover, isApplicant, can } from '@/service/sicutiService';
+import { safeRedirect } from '@/utils/safeRedirect';
 
 const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
@@ -131,18 +132,11 @@ const router = createRouter({
                     name: 'admin-audit-trail',
                     component: () => import('@/views/admin/AdminAuditTrail.vue'),
                     meta: { requiresAuth: true, requiresAdmin: true, ability: 'dashboard_laporan.view_audit' }
-                },
-                {
-                    path: '/profile',
-                    name: 'profile',
-                    component: () => import('@/views/user/Profile.vue'),
-                    meta: { requiresAuth: true, ability: 'login_user.view_profile' }
                 }
             ]
         },
         {
             path: '/validasi/:secret(.*)',
-            alias: '/validasi/:secret',
             name: 'document-validation',
             component: () => import('@/views/approval/DocumentValidation.vue'),
             meta: { public: true }
@@ -166,46 +160,24 @@ const router = createRouter({
     ]
 });
 
-router.beforeEach((to, from, next) => {
-    if (to.meta.public || to.name === 'document-validation') {
-        return next();
-    }
+router.beforeEach((to) => {
+    if (to.meta.public) return true;
 
     const isAuth = Boolean(currentUser.value);
-
     if (to.name !== 'login' && !isAuth) {
-        return next({ name: 'login' });
+        const redirect = safeRedirect(to.fullPath, '');
+        return redirect && redirect !== '/' ? { name: 'login', query: { redirect } } : { name: 'login' };
     }
+    if (to.name === 'login') return isAuth ? { name: 'dashboard' } : true;
 
-    if (to.name === 'login' && isAuth) {
-        return next({ name: 'dashboard' });
-    }
-
-    if (to.meta.requiresSuperAdmin && !isSuperAdmin()) {
-        return next({ name: 'dashboard' });
-    }
-
-    if (to.meta.requiresAdmin && !isAdmin()) {
-        return next({ name: 'dashboard' });
-    }
-
-    if (to.meta.requiresApprover && !isApprover()) {
-        return next({ name: 'dashboard' });
-    }
-
-    if (to.meta.requiresMasterView && !isSuperAdmin() && !can('master_data.view_master_data')) {
-        return next({ name: 'dashboard' });
-    }
-
-    if (to.meta.requiresApplicant && !isApplicant()) {
-        return next({ name: 'dashboard' });
-    }
-
-    if (to.meta.ability && !isSuperAdmin() && !can(to.meta.ability)) {
-        return next({ name: 'dashboard' });
-    }
-
-    next();
+    const denied =
+        (to.meta.requiresSuperAdmin && !isSuperAdmin()) ||
+        (to.meta.requiresAdmin && !isAdmin()) ||
+        (to.meta.requiresApprover && !isApprover()) ||
+        (to.meta.requiresMasterView && !isSuperAdmin() && !can('master_data.view_master_data')) ||
+        (to.meta.requiresApplicant && !isApplicant()) ||
+        (to.meta.ability && !isSuperAdmin() && !can(to.meta.ability));
+    return denied ? { name: 'dashboard' } : true;
 });
 
 export default router;

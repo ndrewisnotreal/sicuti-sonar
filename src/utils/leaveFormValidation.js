@@ -9,6 +9,8 @@ export function defaultFormatDate(d) {
     return `${year}-${month}-${day}`;
 }
 
+// `errors` = pesan per field (kunci: leaveTypeId, startDate, endDate, substituteId, reason); `error` = toast untuk masalah yang tidak terikat satu field
+// (saldo, batas hari, dokumen) dan hanya terisi bila semua field lolos, supaya pengguna tidak melihat dua jenis pesan sekaligus.
 export function validateLeaveForm({
     form,
     selectedLeaveType,
@@ -19,41 +21,25 @@ export function validateLeaveForm({
 }) {
     const s = formatDate(form?.startDate);
     const e = formatDate(form?.endDate);
+    const errors = {};
 
-    if (!form?.leaveTypeId) {
-        return {
-            valid: false,
-            error: { severity: 'error', summary: 'Validasi', detail: 'Silakan pilih jenis cuti', life: 3000 }
-        };
-    }
-    if (!s) {
-        return {
-            valid: false,
-            error: { severity: 'error', summary: 'Validasi', detail: 'Pilih tanggal mulai cuti', life: 3000 }
-        };
-    }
-    if (!e) {
-        return {
-            valid: false,
-            error: { severity: 'error', summary: 'Validasi', detail: 'Pilih tanggal selesai yang sama dengan atau setelah tanggal mulai', life: 3000 }
-        };
-    }
-    if (new Date(e) < new Date(s)) {
-        return {
-            valid: false,
-            error: { severity: 'error', summary: 'Validasi', detail: 'Tanggal selesai harus setelah tanggal mulai', life: 3000 }
-        };
-    }
-    if (calculatedDays <= 0) {
-        return {
-            valid: false,
-            error: { severity: 'error', summary: 'Validasi', detail: 'Rentang tanggal tidak memuat hari kerja (akhir pekan/libur)', life: 3000 }
-        };
+    if (!form?.leaveTypeId) errors.leaveTypeId = 'Silakan pilih jenis cuti';
+    if (!s) errors.startDate = 'Pilih tanggal mulai cuti';
+    else if (!e) errors.endDate = 'Pilih tanggal selesai yang sama dengan atau setelah tanggal mulai';
+    else if (new Date(e) < new Date(s)) errors.endDate = 'Tanggal selesai harus setelah tanggal mulai';
+    else if (calculatedDays <= 0) errors.endDate = 'Rentang tanggal tidak memuat hari kerja (akhir pekan/libur)';
+    if (substituteRequired && !form?.substituteId) errors.substituteId = 'Pilih rekan pengganti tugas selama Anda cuti';
+    if (!form?.reason || !form.reason.trim()) errors.reason = 'Alasan pengajuan cuti wajib diisi';
+
+    if (Object.keys(errors).length) {
+        const first = Object.values(errors)[0];
+        return { valid: false, errors, error: { severity: 'error', summary: 'Validasi', detail: first, life: 3000 } };
     }
 
     if (selectedLeaveType?.usesQuota && calculatedDays > remainingBalance) {
         return {
             valid: false,
+            errors,
             error: {
                 severity: 'error',
                 summary: 'Saldo Kurang',
@@ -66,6 +52,7 @@ export function validateLeaveForm({
     if (selectedLeaveType?.maxDays && calculatedDays > selectedLeaveType.maxDays) {
         return {
             valid: false,
+            errors,
             error: {
                 severity: 'error',
                 summary: 'Melebihi Batas Hari',
@@ -78,6 +65,7 @@ export function validateLeaveForm({
     if (selectedLeaveType?.requiresDocument && !form?.documentName && !selectedLeaveType.allowLateDocument) {
         return {
             valid: false,
+            errors,
             error: {
                 severity: 'error',
                 summary: 'Dokumen Wajib',
@@ -87,37 +75,16 @@ export function validateLeaveForm({
         };
     }
 
-    if (substituteRequired && !form?.substituteId) {
-        return {
-            valid: false,
-            error: { severity: 'error', summary: 'Validasi', detail: 'Pilih rekan pengganti tugas selama Anda cuti', life: 3000 }
-        };
-    }
-
-    if (!form?.reason || !form.reason.trim()) {
-        return {
-            valid: false,
-            error: { severity: 'error', summary: 'Validasi', detail: 'Alasan pengajuan cuti wajib diisi', life: 3000 }
-        };
-    }
-
-    return { valid: true };
+    return { valid: true, errors };
 }
 
 export function validateDraftForm({ form, calculatedDays, formatDate = defaultFormatDate }) {
-    if (!form?.leaveTypeId) {
-        return { valid: false, error: { severity: 'error', summary: 'Validasi', detail: 'Pilih jenis cuti terlebih dahulu', life: 3000 } };
-    }
-    if (!form?.startDate || !form?.endDate) {
-        return { valid: false, error: { severity: 'error', summary: 'Validasi', detail: 'Isi tanggal mulai dan tanggal selesai', life: 3000 } };
-    }
-    const s = formatDate(form.startDate);
-    const e = formatDate(form.endDate);
-    if (new Date(e) < new Date(s)) {
-        return { valid: false, error: { severity: 'error', summary: 'Validasi', detail: 'Tanggal selesai harus setelah tanggal mulai', life: 3000 } };
-    }
-    if (calculatedDays <= 0) {
-        return { valid: false, error: { severity: 'error', summary: 'Validasi', detail: 'Rentang tanggal tidak memuat hari kerja (akhir pekan/libur)', life: 3000 } };
-    }
-    return { valid: true };
+    const errors = {};
+    if (!form?.leaveTypeId) errors.leaveTypeId = 'Pilih jenis cuti terlebih dahulu';
+    if (!form?.startDate) errors.startDate = 'Isi tanggal mulai cuti';
+    else if (!form?.endDate) errors.endDate = 'Isi tanggal selesai cuti';
+    else if (new Date(formatDate(form.endDate)) < new Date(formatDate(form.startDate))) errors.endDate = 'Tanggal selesai harus setelah tanggal mulai';
+    else if (calculatedDays <= 0) errors.endDate = 'Rentang tanggal tidak memuat hari kerja (akhir pekan/libur)';
+    if (Object.keys(errors).length) return { valid: false, errors };
+    return { valid: true, errors };
 }

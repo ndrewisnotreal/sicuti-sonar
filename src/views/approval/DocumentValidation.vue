@@ -91,7 +91,7 @@ onMounted(validate);
 
 <template>
     <!-- Token surface/status, bukan hex: ikut tema terang/gelap (audit-033 #2). -->
-    <div class="min-h-screen bg-surface-100 dark:bg-surface-950 text-surface-900 dark:text-surface-0 antialiased">
+    <div class="min-h-svh bg-surface-100 dark:bg-surface-950 text-surface-900 dark:text-surface-0 antialiased">
         <header class="bg-surface-0 dark:bg-surface-900">
             <div class="max-w-xl mx-auto px-4 h-14 flex items-center gap-2.5">
                 <img :src="publicPath('logo-inalum.png')" alt="Logo PT INALUM" class="h-7 w-auto" />

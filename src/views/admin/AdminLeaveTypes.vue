@@ -177,7 +177,56 @@ onMounted(load);
                 <Button label="Coba lagi" severity="secondary" size="small" class="text-xs !min-h-11" :loading="loading" @click="load" />
             </div>
 
-            <div data-tour="lt-table" class="mt-6">
+            <!-- Di bawah md tabel 7 kolom terpotong; daftar kartu memuat isi yang sama (audit-013 #5). -->
+            <div data-tour="lt-table" class="md:hidden mt-6" :aria-busy="loading">
+                <p v-if="loading && !leaveTypes.length" class="py-8 text-center text-xs text-muted-color" role="status">Memuat jenis cuti…</p>
+                <p v-else-if="!leaveTypes.length" class="py-8 text-center text-sm text-muted-color">{{ loadError ? 'Jenis cuti belum termuat.' : 'Belum ada jenis cuti.' }}</p>
+                <ul v-else class="divide-y divide-surface-200 dark:divide-surface-700" :class="{ 'opacity-60': loading }">
+                    <li v-for="(data, i) in leaveTypes" :key="data.code" class="py-3 space-y-2 text-xs">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <div class="font-semibold text-sm text-surface-900 dark:text-surface-100">{{ data.name }} <span class="font-normal text-muted-color">· {{ data.code }}</span></div>
+                                <div v-if="data.description" class="text-muted-color">{{ data.description }}</div>
+                            </div>
+                            <Tag :value="data.isActive ? 'Aktif' : 'Nonaktif'" :severity="data.isActive ? 'success' : 'secondary'" class="shrink-0" />
+                        </div>
+                        <dl class="grid grid-cols-2 gap-x-3 gap-y-1.5 text-surface-800 dark:text-surface-200">
+                            <div :data-tour="i === 0 ? 'lt-col-quota' : undefined">
+                                <dt class="text-muted-color">Mengurangi kuota</dt>
+                                <dd>{{ data.usesQuota ? 'Ya, mengurangi kuota' : 'Tidak, cuti khusus' }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-muted-color">Wajib dokumen</dt>
+                                <dd>{{ documentRule(data) }}</dd>
+                            </div>
+                            <div class="col-span-2" :data-tour="i === 0 ? 'lt-col-rules' : undefined">
+                                <dt class="text-muted-color">Aturan</dt>
+                                <dd>{{ data.maxDays ? `Maks. ${data.maxDays} hari kerja` : 'Tanpa batas hari' }} · {{ data.allowBackdate ? 'Boleh tanggal lampau' : 'Tidak boleh tanggal lampau' }}</dd>
+                            </div>
+                        </dl>
+                        <div v-if="canManage" class="grid grid-cols-2 gap-2 pt-1">
+                            <Button severity="secondary" outlined size="small" class="text-xs !min-h-11 flex items-center justify-center gap-1.5" :aria-label="`Ubah ${data.name}`" @click="openEdit(data)">
+                                <PhPencilSimple :size="14" weight="bold" aria-hidden="true" />
+                                <span>Ubah</span>
+                            </Button>
+                            <Button
+                                :severity="data.isActive ? 'danger' : 'success'"
+                                outlined
+                                size="small"
+                                class="text-xs !min-h-11 flex items-center justify-center gap-1.5"
+                                :aria-label="`${data.isActive ? 'Nonaktifkan' : 'Aktifkan'} ${data.name}`"
+                                @click="toggleStatus(data)"
+                            >
+                                <PhProhibit v-if="data.isActive" :size="14" weight="bold" aria-hidden="true" />
+                                <PhCheck v-else :size="14" weight="bold" aria-hidden="true" />
+                                <span>{{ data.isActive ? 'Nonaktifkan' : 'Aktifkan' }}</span>
+                            </Button>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+
+            <div data-tour="lt-table" class="hidden md:block mt-6">
                 <DataTable :value="leaveTypes" :loading="loading" class="p-datatable-sm text-xs" responsiveLayout="scroll">
                     <template #empty>
                         <div class="text-center py-8 text-muted-color">{{ loadError ? 'Jenis cuti belum termuat.' : 'Belum ada jenis cuti.' }}</div>

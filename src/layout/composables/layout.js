@@ -1,4 +1,4 @@
-import { ref, computed, nextTick } from 'vue';
+import { ref, computed, nextTick, watchEffect } from 'vue';
 
 const STORAGE_KEYS = {
     DARK_THEME: 'sicuti_dark_theme',
@@ -56,6 +56,10 @@ if (typeof document !== 'undefined') {
     } else {
         document.documentElement.classList.remove('app-dark');
     }
+    // Status bar HP mengikuti warna topbar (surface-0 / zinc-900); tema memakai kelas, bukan setelan OS (audit-013 #18).
+    watchEffect(() => {
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDarkTheme.value ? '#18181b' : '#ffffff');
+    });
 }
 
 if (currentPrimaryColor.value) {

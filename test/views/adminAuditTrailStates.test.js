@@ -5,7 +5,7 @@ const getAuditLogs = vi.fn();
 const saveBlob = vi.fn();
 const toastAdd = vi.fn();
 vi.mock('@/service/adminService', () => ({
-    adminService: { getAuditLogs: (...a) => getAuditLogs(...a) },
+    adminService: { getAuditLogs: (...a) => getAuditLogs(...a), getUsers: vi.fn().mockResolvedValue([]), getLeaveTypes: vi.fn().mockResolvedValue([]) },
     AUDIT_ACTION_LABEL: { LOGIN: 'Masuk aplikasi', ACCESS_DENIED: 'Akses ditolak' },
     AUDIT_ENTITY_LABEL: { AUTH: 'Autentikasi' }
 }));

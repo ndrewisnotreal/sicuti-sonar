@@ -9,7 +9,8 @@ import {
     can,
     lastReturnNote,
     documentPending,
-    sicutiState
+    sicutiState,
+    syncFromBackend
 } from '@/service/sicutiService';
 import LeaveDetailDialog from '@/components/leave/LeaveDetailDialog.vue';
 import LeaveFormDialog from '@/components/leave/LeaveFormDialog.vue';
@@ -100,6 +101,20 @@ function openEditLeave(reqOrId) {
     isLeaveFormVisible.value = true;
 }
 
+// Syarat sama dengan tombol Ajukan Ulang / Ubah draf di baris. Daftar ini hanya berisi pengajuan milik sendiri, jadi id tidak ditemukan = bukan milik / tidak ada.
+const canEditRequest = (req) => Boolean(req) && ((req.status === 'returned' && canEditReturned.value) || (req.status === 'draft' && canSubmit.value));
+
+// Tautan /leave/edit/:id diperiksa terhadap daftar terbaru agar kepemilikan dan status bisa dicek.
+async function openEditFromUrl(id) {
+    await fetchRequests();
+    const found = myRequests.value.find((r) => (r.id_request || r.id) === id);
+    if (canEditRequest(found)) {
+        openEditLeave(found);
+    } else {
+        toast.add({ severity: 'warn', summary: 'Tidak Dapat Diubah', detail: 'Pengajuan tidak dapat diubah', life: 4000 });
+    }
+}
+
 watch(
     () => [route.query.action, route.query.editId],
     ([action, editId]) => {
@@ -107,7 +122,7 @@ watch(
             openNewLeave();
             router.replace({ query: {} });
         } else if (editId) {
-            openEditLeave(editId);
+            openEditFromUrl(String(editId));
             router.replace({ query: {} });
         }
     },
@@ -176,6 +191,14 @@ function setQuickFilter(val) {
     statusFilter.value = val;
 }
 
+// Di HP tujuh chip status memakan tiga baris; Select memakai nilai dan setter yang sama (audit-013 #3).
+// 'all' menggantikan null karena Select menganggap null sebagai belum memilih.
+const statusSelectOptions = computed(() => statusTabs.value.map((t) => ({ value: t.key ?? 'all', label: `${t.label} (${loadError.value ? '–' : t.count})` })));
+const statusSelect = computed({
+    get: () => statusFilter.value ?? 'all',
+    set: (val) => setQuickFilter(val === 'all' ? null : val)
+});
+
 function resetFilters() {
     searchQuery.value = '';
     statusFilter.value = null;
@@ -201,21 +224,25 @@ function viewDetail(req) {
 
 function cancelRequest(req) {
     const id = req.id_request || req.id;
+    const isDraft = req.status === 'draft';
 
     confirm.require({
-        message: `Batalkan pengajuan cuti #${id}? Pengajuan yang dibatalkan tidak dapat diproses lagi.`,
-        header: 'Konfirmasi Pembatalan Cuti',
+        message: isDraft
+            ? `Batalkan draf #${id}? Draf tidak dihapus: ia tetap tampil di daftar berstatus Dibatalkan dan tidak dapat diproses lagi.`
+            : `Batalkan pengajuan cuti #${id}? Pengajuan yang dibatalkan tidak dapat diproses lagi.`,
+        header: isDraft ? 'Konfirmasi Pembatalan Draf' : 'Konfirmasi Pembatalan Cuti',
         rejectProps: { label: 'Kembali', severity: 'secondary', outlined: true },
-        acceptProps: { label: 'Ya, Batalkan Pengajuan', severity: 'danger' },
+        acceptProps: { label: isDraft ? 'Ya, Batalkan Draf' : 'Ya, Batalkan Pengajuan', severity: 'danger' },
         // Fokus awal di Kembali: Enter tidak langsung membatalkan (DESIGN.md, audit-027 #2).
         defaultFocus: 'reject',
         accept: async () => {
             try {
                 await leaveService.cancelLeave(id);
+                void syncFromBackend({ fresh: true });
                 toast.add({
                     severity: 'info',
-                    summary: 'Cuti Dibatalkan',
-                    detail: `Pengajuan #${id} berhasil dibatalkan`,
+                    summary: isDraft ? 'Draf Dibatalkan' : 'Cuti Dibatalkan',
+                    detail: `${isDraft ? 'Draf' : 'Pengajuan'} #${id} berhasil dibatalkan`,
                     life: 4500
                 });
                 await fetchRequests();
@@ -250,7 +277,11 @@ function cancelRequest(req) {
 
             <div class="mt-6 space-y-4">
                 <!-- Status sebagai pilihan cepat dengan jumlah, pola Pemantauan (audit-027 #5, #8). -->
-                <div data-tour="leave-status-tabs" role="group" aria-labelledby="leave-status-label" class="flex flex-wrap items-center gap-2">
+                <div data-tour="leave-status-tabs" class="sm:hidden">
+                    <label for="leave-status-select" class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1">Status</label>
+                    <Select v-model="statusSelect" inputId="leave-status-select" :options="statusSelectOptions" optionLabel="label" optionValue="value" class="w-full !min-h-11" />
+                </div>
+                <div data-tour="leave-status-tabs" role="group" aria-labelledby="leave-status-label" class="hidden sm:flex flex-wrap items-center gap-2">
                     <span id="leave-status-label" class="text-xs font-medium text-surface-700 dark:text-surface-300 mr-1">Status</span>
                     <button
                         v-for="tab in statusTabs"
@@ -435,7 +466,7 @@ function cancelRequest(req) {
                                     type="button"
                                     :class="[iconBtn, 'hover:text-(--status-danger-fg) hover:bg-(--status-danger-bg)']"
                                     :aria-label="`Batalkan ${data.id_request || data.id}`"
-                                    title="Batalkan pengajuan"
+                                    :title="data.status === 'draft' ? 'Batalkan draf' : 'Batalkan pengajuan'"
                                     @click="cancelRequest(data)"
                                 >
                                     <PhTrash :size="16" weight="bold" aria-hidden="true" />
@@ -521,7 +552,7 @@ function cancelRequest(req) {
                                 @click="cancelRequest(item)"
                             >
                                 <PhTrash :size="14" weight="bold" aria-hidden="true" />
-                                <span>Batalkan</span>
+                                <span>{{ item.status === 'draft' ? 'Batalkan Draf' : 'Batalkan' }}</span>
                             </Button>
                         </div>
                     </li>

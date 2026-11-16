@@ -1,8 +1,9 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { adminService } from '@/service/adminService';
 import { sicutiState, syncFromBackend, formatDate, CURRENT_YEAR } from '@/service/sicutiService';
 import { useToast } from 'primevue/usetoast';
+import { parseHolidayCsv } from '@/utils/holidayCsv';
 import { PhDownloadSimple, PhWarningCircle, PhCheckCircle, PhUploadSimple } from '@phosphor-icons/vue';
 
 const props = defineProps({
@@ -23,6 +24,8 @@ const importFile = ref(null);
 const parsedHolidays = ref([]);
 const importLoading = ref(false);
 const importError = ref('');
+const validRows = computed(() => parsedHolidays.value.filter((r) => !r.error));
+const invalidRows = computed(() => parsedHolidays.value.filter((r) => r.error));
 
 watch(
     () => props.visible,
@@ -68,49 +71,16 @@ function handleHolidayFileUpload(event) {
     const reader = new FileReader();
     reader.onload = (e) => {
         try {
-            const text = e.target.result;
-            const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
-            if (lines.length <= 1) {
+            const { rows, empty } = parseHolidayCsv(
+                e.target.result,
+                sicutiState.holidays.map((x) => x.date)
+            );
+            if (empty) {
                 importError.value = 'File CSV kosong atau hanya berisi baris header.';
                 return;
             }
-
-            const headers = lines[0].split(',').map((h) => h.trim().toLowerCase().replace(/^["']|["']$/g, ''));
-            const rows = [];
-
-            for (let i = 1; i < lines.length; i++) {
-                const line = lines[i];
-                const values = line.split(',').map((v) => v.trim().replace(/^["']|["']$/g, ''));
-                if (values.length < 2) continue;
-
-                const row = {};
-                headers.forEach((h, idx) => {
-                    row[h] = values[idx] || '';
-                });
-
-                const rawDate = row.holiday_date || row.date || row.tanggal || '';
-                const rawName = row.nm_holiday || row.name || row.nama || '';
-                const typeText = (row.type || row.kategori || 'national').toLowerCase();
-                const rawType = typeText === 'collective' || typeText.includes('bersama') ? 'collective' : 'national';
-
-                if (rawDate && rawName) {
-                    const y = Number(rawDate.slice(0, 4)) || props.year || CURRENT_YEAR;
-                    rows.push({
-                        id: 'H_IMP_' + Date.now().toString(36) + '_' + i,
-                        date: rawDate,
-                        name: rawName,
-                        year: y,
-                        type: rawType
-                    });
-                }
-            }
-
-            if (rows.length === 0) {
-                importError.value = 'Tidak ada baris data hari libur yang valid dalam file CSV.';
-                return;
-            }
-
             parsedHolidays.value = rows;
+            if (!rows.some((r) => !r.error)) importError.value = 'Tidak ada baris yang bisa diimpor. Perbaiki baris bertanda merah lalu unggah ulang.';
         } catch (err) {
             importError.value = 'Gagal membaca isi file CSV: ' + err.message;
         }
@@ -119,8 +89,8 @@ function handleHolidayFileUpload(event) {
 }
 
 async function processHolidayImport() {
-    if (!parsedHolidays.value.length) {
-        importError.value = 'Tidak ada data hari libur untuk diimport.';
+    if (!validRows.value.length) {
+        importError.value = 'Tidak ada data hari libur yang valid untuk diimpor.';
         return;
     }
 
@@ -128,26 +98,28 @@ async function processHolidayImport() {
     let addedCount = 0;
     const failed = [];
 
-    for (const h of parsedHolidays.value) {
-        if (sicutiState.holidays.some((x) => x.date === h.date)) continue;
+    for (const h of validRows.value) {
         try {
             await adminService.createHoliday({ holiday_date: h.date, nm_holiday: h.name, type: h.type });
             addedCount++;
         } catch (err) {
-            failed.push(`${h.date}: ${err.message}`);
+            failed.push(`baris ${h.line} (${h.date}): ${err.message}`);
         }
     }
-    await syncFromBackend();
+    await syncFromBackend({ fresh: true });
 
-    if (failed.length) {
-        toast.add({ severity: 'warn', summary: `${failed.length} baris gagal diimport`, detail: failed.slice(0, 3).join('; '), life: 5000 });
-    }
+    // API membuat per baris dan tidak mengembalikan daftar dilewati; baris tak valid dari preview dilaporkan di sini.
+    const skipped = invalidRows.value.map((r) => `baris ${r.line}${r.date ? ` (${r.date})` : ''}: ${r.error}`);
+    const problems = [...skipped, ...failed];
     toast.add({
-        severity: 'success',
-        summary: 'Impor CSV Berhasil',
-        detail: `${addedCount} hari libur baru berhasil ditambahkan ke kalender.`,
-        life: 3500
+        severity: addedCount ? 'success' : 'warn',
+        summary: 'Impor CSV Selesai',
+        detail: `${addedCount} ditambah, ${skipped.length} dilewati, ${failed.length} gagal.`,
+        life: 4000
     });
+    if (problems.length) {
+        toast.add({ severity: 'warn', summary: `${problems.length} baris tidak diimpor`, detail: problems.join('; '), life: 12000 });
+    }
 
     importLoading.value = false;
     emit('update:visible', false);
@@ -209,10 +181,14 @@ async function processHolidayImport() {
             </div>
 
             <div v-if="parsedHolidays.length > 0" class="space-y-2">
-                <div class="flex items-center justify-between text-xs">
+                <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
                     <span class="font-semibold text-surface-900 dark:text-surface-100 flex items-center gap-1">
                         <PhCheckCircle :size="14" weight="bold" class="text-(--status-success-fg)" aria-hidden="true" />
-                        <span>Preview Data Terbaca ({{ parsedHolidays.length }} Hari Libur)</span>
+                        <span>Preview: {{ validRows.length }} siap diimpor</span>
+                    </span>
+                    <span v-if="invalidRows.length" class="font-semibold text-(--status-danger-fg) flex items-center gap-1" role="status">
+                        <PhWarningCircle :size="14" weight="bold" aria-hidden="true" />
+                        <span>{{ invalidRows.length }} baris dilewati</span>
                     </span>
                 </div>
 
@@ -222,15 +198,17 @@ async function processHolidayImport() {
                             <tr>
                                 <th class="p-2 text-left font-semibold">Tanggal</th>
                                 <th class="p-2 text-left font-semibold">Nama Hari Libur</th>
-                                <th class="p-2 text-left font-semibold">Kategori</th>
+                                <th class="p-2 text-left font-semibold">Kategori / Keterangan</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-surface-100 dark:divide-surface-800">
-                            <tr v-for="(h, idx) in parsedHolidays" :key="idx">
-                                <td class="p-2 font-semibold">{{ formatDate(h.date) }}</td>
-                                <td class="p-2">{{ h.name }}</td>
+                            <tr v-for="h in parsedHolidays" :key="h.line" :class="{ 'bg-(--status-danger-bg)': h.error }">
+                                <td class="p-2 font-semibold">{{ h.error ? h.date || '-' : formatDate(h.date) }}</td>
+                                <td class="p-2">{{ h.name || '-' }}</td>
                                 <td class="p-2">
+                                    <span v-if="h.error" class="text-(--status-danger-fg)">Baris {{ h.line }}: {{ h.error }}</span>
                                     <Tag
+                                        v-else
                                         :value="h.type === 'collective' ? 'Cuti Bersama' : 'Libur Nasional'"
                                         :severity="h.type === 'collective' ? 'warn' : 'danger'"
                                     />
@@ -239,6 +217,7 @@ async function processHolidayImport() {
                         </tbody>
                     </table>
                 </div>
+                <p v-if="invalidRows.length" class="text-xs text-muted-color">Baris bertanda merah tidak ikut diimpor.</p>
             </div>
 
             <div class="flex justify-end gap-2 pt-3 border-t border-surface-200 dark:border-surface-700">
@@ -256,7 +235,7 @@ async function processHolidayImport() {
                     size="small"
                     class="text-xs font-bold"
                     :loading="importLoading"
-                    :disabled="parsedHolidays.length === 0"
+                    :disabled="validRows.length === 0"
                     @click="processHolidayImport"
                 />
             </div>
