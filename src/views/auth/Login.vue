@@ -144,7 +144,7 @@ function cancelExpired(message = '') {
         <div class="relative z-10 w-full max-w-md bg-surface-0 dark:bg-surface-900 rounded-xl p-6 sm:p-8 shadow-xl">
             <div class="text-center mb-6">
                 <img :src="publicPath('logo-inalum.png')" alt="Logo PT INALUM" class="h-16 w-auto object-contain mx-auto mb-3" />
-                <h1 class="text-2xl font-bold text-primary leading-tight">Lebur</h1>
+                <h1 class="text-2xl font-bold text-primary leading-tight">SiCuti</h1>
                 <p class="text-xs text-muted-color mt-1">Sistem Manajemen Cuti Digital · PT INALUM</p>
             </div>
 

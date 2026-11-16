@@ -324,7 +324,7 @@ onBeforeUnmount(() => {
             <div class="px-6 pt-5 pb-3 flex items-start justify-between gap-3 shrink-0">
                 <div>
                     <h1 id="profile-dialog-title" class="text-lg font-bold text-surface-900 dark:text-surface-0">Profil &amp; Pengaturan Akun</h1>
-                    <p class="text-xs text-muted-color mt-0.5">Data kepegawaian dan kontak notifikasi akun Lebur Anda.</p>
+                    <p class="text-xs text-muted-color mt-0.5">Data kepegawaian dan kontak notifikasi akun SiCuti Anda.</p>
                 </div>
                 <button
                     type="button"
