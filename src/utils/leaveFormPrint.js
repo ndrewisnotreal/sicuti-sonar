@@ -55,6 +55,23 @@ export function pickBalanceForLeave(balances, startDate) {
     return match || list[0] || null;
 }
 
+const sum = (arr) => arr.reduce((a, b) => a + b, 0);
+
+// Label cadangan bila backend belum mengirim approver_role (peran di alur approval):
+// kiri = Atasan Langsung, kanan = Mengetahui, di antaranya = Menyetujui.
+export function signLabel(index, count) {
+    if (index === 0) return 'Atasan Langsung';
+    return index === count - 1 ? 'Mengetahui,' : 'Menyetujui,';
+}
+
+// Catatan semua penyetuju untuk kotak Komentar, urut sesuai alur; penyetuju tanpa catatan dilewati.
+export function approverComments(approvers) {
+    return approvers
+        .filter((s) => String(s?.notes || '').trim())
+        .map((s) => `${s.approverName}: ${String(s.notes).trim()}`)
+        .join('\n');
+}
+
 const lines = (arr) => arr.map((t) => `<div class="ln">${t === '' ? '&nbsp;' : t}</div>`).join('');
 
 export function publicAppOrigin() {
@@ -73,8 +90,20 @@ export function validationUrl(token) {
 export async function buildLeaveFormHtml(d) {
     const toDataURL = QRCode?.toDataURL || QRCode?.default?.toDataURL;
     const qrImage = async (url) => (url ? `<img src="${await toDataURL(url, { width: 240, margin: 0 })}" alt="QR validasi pengesah" />` : '');
-    const qrAtasan = await qrImage(d.atasan?.qrUrl);
-    const qrMengetahui = await qrImage(d.mengetahui?.qrUrl);
+    // Satu kolom per penyetuju sesuai urutan alur approval; tanpa penyetuju tetap dua kolom kosong seperti formulir aslinya.
+    const signers = d.signers?.length ? d.signers : [null, null];
+    const qrs = await Promise.all(signers.map((s) => qrImage(s?.qrUrl)));
+    // Dua kolom memakai lebar asli formulir (kolom 1-5 | 6-10); tiga kolom atau lebih dibagi rata.
+    const signColumns = signers.length === 2 ? `${mm(sum(GRID.slice(0, 5)))} ${mm(sum(GRID.slice(5)))}` : `repeat(${signers.length}, 1fr)`;
+    const signCells = signers
+        .map(
+            (s, i) => `<div class="signer">
+                ${lines([esc(s?.role) || signLabel(i, signers.length), `    ${esc(monthYear(s?.date))}`])}
+                <div class="qr">${qrs[i]}</div>
+                ${lines([`<u>${DOTS_APPROVER}</u>`, esc(s?.name), ''])}
+            </div>`
+        )
+        .join('');
 
     const jenis = formJenis(d.leaveTypeName);
     const jenisRows = JENIS_OPTIONS.map(
@@ -105,7 +134,7 @@ export async function buildLeaveFormHtml(d) {
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
     body { font-family: Calibri, Carlito, 'Segoe UI', Arial, sans-serif; font-size: 10pt; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .page { position: relative; width: 210mm; height: 297mm; padding-top: 12.5mm; background: #fff; overflow: hidden; }
+    .page { position: relative; width: 210mm; min-height: 297mm; padding-top: 12.5mm; background: #fff; overflow: hidden; }
     .ticket { position: absolute; top: 12.5mm; left: 19.8mm; font-size: 8pt; line-height: 9.8pt; }
     @media screen { body { background: #e5e5e5; } .page { margin: 8mm auto; box-shadow: 0 1px 6px rgba(0,0,0,.25); } }
     table { border-collapse: collapse; table-layout: fixed; }
@@ -137,8 +166,11 @@ export async function buildLeaveFormHtml(d) {
     .cb-last td { border-bottom: 0.5pt solid #000; }
     .h3 { height: 36.6pt; }
     .sign-employee td { height: 29.6mm; vertical-align: top; padding-top: 1.2mm; }
-    .komentar td { height: 13.7mm; }
-    .sign-approver td { height: 39.8mm; vertical-align: top; padding-top: 0.6mm; }
+    .komentar td { height: 13.7mm; white-space: pre-line; vertical-align: top; }
+    .sign-approver td { height: 39.8mm; vertical-align: top; padding: 0; }
+    .sign-grid { display: grid; height: 39.8mm; }
+    .signer { padding: 0.6mm 1.9mm 0; overflow: hidden; }
+    .signer + .signer { border-left: 0.5pt solid #000; }
     .qr { height: 48.8pt; display: flex; align-items: center; }
     .qr img { width: 16mm; height: 16mm; display: block; }
 </style>
@@ -177,7 +209,7 @@ export async function buildLeaveFormHtml(d) {
             <tr><td colspan="4" class="b">Departemen</td><td colspan="6">${esc(d.department)}</td></tr>
             <tr><td colspan="4" class="b">Cuti kerja yang terpakai</td><td class="r">${esc(d.usedDays)}</td><td colspan="5" class="no-b"></td></tr>
             <tr><td colspan="4" class="b">Sisa Cuti yang masih berlaku</td><td class="r">${esc(d.remainingDays)}</td><td colspan="5" class="no-t"></td></tr>
-            <tr><td colspan="4" class="b">Atasan Langsung</td><td colspan="6">${esc(d.atasan?.name)}</td></tr>
+            <tr><td colspan="4" class="b">Atasan Langsung</td><td colspan="6">${esc(signers[0]?.name)}</td></tr>
             <tr><td colspan="4" class="no-r"><div class="ln">&nbsp;</div></td><td colspan="6" class="no-l"></td></tr>
             <tr><td colspan="10" class="b">Jenis Izin/Cuti yang Diminta (pilih alasan yang relevan)</td></tr>
             ${jenisRows}
@@ -210,16 +242,7 @@ export async function buildLeaveFormHtml(d) {
             <tr><td colspan="10">Komentar :</td></tr>
             <tr class="komentar"><td colspan="10">${esc(d.komentar)}</td></tr>
             <tr class="sign-approver">
-                <td colspan="5">
-                    ${lines(['Atasan Langsung', `    ${esc(monthYear(d.atasan?.date))}`])}
-                    <div class="qr">${qrAtasan}</div>
-                    ${lines([`<u>${DOTS_APPROVER}</u>`, esc(d.atasan?.name), ''])}
-                </td>
-                <td colspan="5">
-                    ${lines(['Mengetahui,', `    ${esc(monthYear(d.mengetahui?.date))}`])}
-                    <div class="qr">${qrMengetahui}</div>
-                    ${lines([`<u>${DOTS_APPROVER}</u>`, esc(d.mengetahui?.name), ''])}
-                </td>
+                <td colspan="10" class="signers"><div class="sign-grid" style="grid-template-columns: ${signColumns}">${signCells}</div></td>
             </tr>
         </table>
     </div>
