@@ -1,7 +1,7 @@
 export const TOUR_STEPS = {
     'approval.pengenalan': [
         {
-            title: 'Selamat datang di Lebur',
+            title: 'Selamat datang di SiCuti',
             text: 'Sebagai approver, Anda memeriksa dan memutuskan pengajuan cuti yang masuk ke antrean Anda sesuai urutan di Alur Approval. Tur singkat ini menunjukkan bagian-bagian utamanya.'
         },
         {

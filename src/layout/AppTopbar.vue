@@ -168,7 +168,7 @@ function handleLogout() {
             <router-link to="/" :class="['flex items-center gap-2 sm:gap-2.5 min-w-0 pointer-coarse:min-h-11', { 'lg:hidden': showSidebar }]">
                 <img :src="publicPath('logo-inalum.png')" alt="Logo PT INALUM" class="h-7 sm:h-8 w-auto object-contain shrink-0" />
                 <div class="flex flex-col min-w-0 max-[359px]:hidden">
-                    <span class="font-bold text-base leading-tight text-primary">Lebur</span>
+                    <span class="font-bold text-base leading-tight text-primary">SiCuti</span>
                     <span class="hidden sm:block text-xs text-muted-color font-normal whitespace-nowrap">PT Indonesia Asahan Aluminium</span>
                 </div>
             </router-link>

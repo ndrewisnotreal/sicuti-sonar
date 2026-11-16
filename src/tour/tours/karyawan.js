@@ -1,8 +1,8 @@
 export const TOUR_STEPS = {
     'karyawan.pengenalan': [
         {
-            title: 'Selamat datang di Lebur',
-            text: 'Lebur adalah sistem pengajuan cuti PT Inalum. Tur singkat ini menunjukkan bagian-bagian utama. Anda bisa menutupnya kapan saja.'
+            title: 'Selamat datang di SiCuti',
+            text: 'SiCuti adalah sistem pengajuan cuti PT Inalum. Tur singkat ini menunjukkan bagian-bagian utama. Anda bisa menutupnya kapan saja.'
         },
         {
             element: 'menu:/leave/history',

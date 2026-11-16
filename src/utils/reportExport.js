@@ -37,7 +37,7 @@ export function printReportPdf({ title, subtitle, columns, rows }) {
   footer { margin-top: 10px; color: #94a3b8; font-size: 10px; }
 </style></head><body>
 <header><div><h1>${esc(title)}</h1><div class="sub">${esc(subtitle)}</div></div>
-<div class="meta">Lebur - Sistem Cuti PT Inalum<br>Dicetak ${esc(printedAt)}</div></header>
+<div class="meta">SiCuti - Sistem Cuti PT Inalum<br>Dicetak ${esc(printedAt)}</div></header>
 <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
 <footer>${rows.length} baris data</footer>
 <script>window.onload = function () { window.print(); };<\/script>
