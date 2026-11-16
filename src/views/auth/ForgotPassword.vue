@@ -15,7 +15,7 @@ const { isDarkTheme } = useLayout();
         <div class="relative z-10 w-full max-w-md bg-surface-0 dark:bg-surface-900 rounded-xl p-6 sm:p-8 shadow-xl">
             <div class="text-center mb-6">
                 <img :src="publicPath('logo-inalum.png')" alt="Logo PT INALUM" class="h-16 w-auto object-contain mx-auto mb-3" />
-                <p class="text-2xl font-bold text-primary leading-tight">Lebur</p>
+                <p class="text-2xl font-bold text-primary leading-tight">SiCuti</p>
                 <p class="text-xs text-muted-color mt-1">Pemulihan Akun · PT INALUM</p>
             </div>
 

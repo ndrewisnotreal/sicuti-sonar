@@ -31,7 +31,7 @@ const mainRef = ref(null);
         >
             <router-link
                 to="/"
-                :title="isSidebarCollapsed ? 'Lebur, PT Indonesia Asahan Aluminium' : undefined"
+                :title="isSidebarCollapsed ? 'SiCuti, PT Indonesia Asahan Aluminium' : undefined"
                 :class="[
                     'flex items-center h-16 shrink-0 gap-3 rounded-lg focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-white',
                     isSidebarCollapsed ? 'justify-center' : 'px-4'
@@ -39,7 +39,7 @@ const mainRef = ref(null);
             >
                 <img :src="publicPath('logo-inalum-mark.png')" alt="Logo PT INALUM" class="w-8 h-8 object-contain shrink-0" />
                 <div v-if="!isSidebarCollapsed" class="flex flex-col min-w-0">
-                    <span class="font-bold text-lg leading-tight text-white">Lebur</span>
+                    <span class="font-bold text-lg leading-tight text-white">SiCuti</span>
                     <span class="text-[11px] text-white/60 whitespace-nowrap truncate">PT Indonesia Asahan Aluminium</span>
                 </div>
             </router-link>

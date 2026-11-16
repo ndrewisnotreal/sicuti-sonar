@@ -16,7 +16,7 @@ import LeaveApprovalTimeline from '@/components/leave/LeaveApprovalTimeline.vue'
 import TourHelpButton from '@/components/common/TourHelpButton.vue';
 import { useToast } from 'primevue/usetoast';
 import { localIsoDate } from '@/utils/onLeaveToday';
-import { buildLeaveFormHtml, validationUrl, isQrReachableFromPhone, pickBalanceForLeave } from '@/utils/leaveFormPrint';
+import { approverComments, buildLeaveFormHtml, validationUrl, isQrReachableFromPhone, pickBalanceForLeave } from '@/utils/leaveFormPrint';
 import {
     PhPrinter,
     PhCopy,
@@ -105,6 +105,7 @@ const stepsList = computed(() => {
                 level: s.level,
                 approverId: s.uid_approver || matchingRecord?.approver_id || s.approver_id || '',
                 approverName: stepApproverName(s, matchingRecord),
+                approverRole: s.approver_role || '',
                 status: st,
                 action: act,
                 notes: s.notes || matchingRecord?.notes || null,
@@ -173,22 +174,18 @@ async function printDocument() {
     const req = fullRequest.value;
     const requesterUid = req.uid_user_system;
     const approvers = stepsList.value.filter((s) => s.status === 'approved' && s.approverId && s.approverId !== requesterUid);
-    const atasan = approvers[0];
-    const mengetahui = approvers[approvers.length - 1];
 
     // Periode saldo bergeser dari tahun kalender (mis. 5 Feb–4 Feb): cuti Jan 2027 dipotong dari baris periode 2026.
     const year = Number(String(startDate.value || '').slice(0, 4)) || new Date().getFullYear();
     const rows = await Promise.all([year, year - 1].map((y) => leaveService.getBalances({ uid: requesterUid, year: y }).catch(() => [])));
     const balance = pickBalanceForLeave(rows.flat(), startDate.value);
 
-    const signerOf = (step) =>
-        step
-            ? {
-                  name: step.approverName,
-                  date: step.actedAt,
-                  qrUrl: req.validation_tokens?.[step.approverId] ? validationUrl(req.validation_tokens[step.approverId]) : ''
-              }
-            : null;
+    const signerOf = (step) => ({
+        name: step.approverName,
+        role: step.approverRole,
+        date: step.actedAt,
+        qrUrl: req.validation_tokens?.[step.approverId] ? validationUrl(req.validation_tokens[step.approverId]) : ''
+    });
     const html = await buildLeaveFormHtml({
         ticketId: ticketId.value,
         employeeName: requesterName.value,
@@ -206,9 +203,8 @@ async function printDocument() {
         location: '',
         submittedAt: req.created_at,
         status: status.value,
-        komentar: atasan?.notes || '',
-        atasan: signerOf(atasan),
-        mengetahui: signerOf(mengetahui),
+        komentar: approverComments(approvers),
+        signers: approvers.map(signerOf),
         logoUrl: `${window.location.origin}${publicPath('logo-sinergi.png')}`
     });
 
