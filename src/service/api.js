@@ -91,6 +91,7 @@ async function request(endpoint, options = {}) {
 
 async function requestBlob(endpoint, params) {
     const res = await fetch(buildUrl(endpoint, params), { headers: { 'x-api-key': APP_KEY }, credentials: 'include' });
+    if (res.status === 401) throw await sessionExpired(res);
     if (!res.ok) {
         const body = await res.json().catch(() => null);
         const err = new Error(body?.error || body?.message || res.statusText || 'Berkas tidak bisa diambil');
@@ -99,7 +100,15 @@ async function requestBlob(endpoint, params) {
     }
     const disposition = res.headers.get('content-disposition') || '';
     const match = /filename="?([^";]+)"?/i.exec(disposition);
-    return { blob: await res.blob(), filename: match ? decodeURIComponent(match[1]) : '' };
+    return { blob: await res.blob(), filename: match ? safeDecode(match[1]) : '' };
+}
+
+function safeDecode(value) {
+    try {
+        return decodeURIComponent(value);
+    } catch {
+        return value;
+    }
 }
 
 export function saveBlob(blob, filename) {

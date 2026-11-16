@@ -106,9 +106,17 @@ describe('adminService daftar pengajuan (Pemantauan & Laporan)', () => {
         expect(await adminService.getLeaveRequests()).toEqual([{ id_request: 'REQ-SIT-0001/2026' }]);
         expect(await adminService.getLeaveRequests({ year: 2026 })).toEqual([{ id_request: 'REQ-SIT-0001/2026' }]);
         expect(api.get.mock.calls).toEqual([
-            ['/sicuti/leave-request', { limit: 1000 }],
-            ['/sicuti/leave-request', { limit: 1000, year: 2026 }]
+            ['/sicuti/leave-request', { limit: 1000, page: 1 }],
+            ['/sicuti/leave-request', { limit: 1000, year: 2026, page: 1 }]
         ]);
+    });
+
+    it('getLeaveRequests mengambil halaman berikutnya sampai total tercapai', async () => {
+        api.get
+            .mockResolvedValueOnce({ data: { data: [{ id_request: 'A' }, { id_request: 'B' }], total: 3 } })
+            .mockResolvedValueOnce({ data: { data: [{ id_request: 'C' }], total: 3 } });
+        expect(await adminService.getLeaveRequests({ year: 2026 })).toEqual([{ id_request: 'A' }, { id_request: 'B' }, { id_request: 'C' }]);
+        expect(api.get.mock.calls.map((c) => c[1].page)).toEqual([1, 2]);
     });
 
     it('getLeaveRequests menerima respons berbentuk daftar langsung', async () => {

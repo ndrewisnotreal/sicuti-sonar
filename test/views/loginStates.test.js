@@ -43,4 +43,18 @@ describe('Login (audit-032)', () => {
         expect(w.find('[role="alert"]').text()).toBe('NIK atau kata sandi salah');
         w.unmount();
     });
+
+    it('tombol Masuk menampilkan "Memproses…" selama login berjalan', async () => {
+        let resolve;
+        login.mockReturnValueOnce(new Promise((r) => (resolve = r)));
+        const w = mount(Login, { global: { stubs }, attachTo: document.body });
+        await w.find('#login-id').setValue('123');
+        await w.find('#login-password').setValue('x');
+        await w.find('form').trigger('submit');
+        expect(w.find('button[type="submit"]').text()).toBe('Memproses…');
+        resolve({ success: false, message: 'gagal' });
+        await flushPromises();
+        expect(w.find('button[type="submit"]').text()).toBe('Masuk');
+        w.unmount();
+    });
 });

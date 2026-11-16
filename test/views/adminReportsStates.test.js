@@ -50,7 +50,7 @@ function okData() {
     svc.getDepartments.mockResolvedValue([]);
     apiGet.mockResolvedValue({ data: summary });
 }
-const exportBtn = (w) => w.findAll('button').find((b) => b.text().includes('Ekspor CSV'));
+const exportBtn = (w) => w.findAll('button').find((b) => b.text().includes('Ekspor Excel'));
 
 describe('Laporan (audit-022)', () => {
     beforeEach(() => {
@@ -98,7 +98,7 @@ describe('Laporan (audit-022)', () => {
         expect(params.type).toBe('leave-type-summary');
         expect(params).not.toHaveProperty('search');
         expect(params).not.toHaveProperty('status');
-        expect(filename.endsWith('.csv')).toBe(true);
+        expect(filename.endsWith('.xlsx')).toBe(true);
     });
 
     it('#3 ekspor 0 baris ditolak', async () => {

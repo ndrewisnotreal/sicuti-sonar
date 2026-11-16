@@ -9,7 +9,8 @@ import {
     can,
     lastReturnNote,
     documentPending,
-    sicutiState
+    sicutiState,
+    syncFromBackend
 } from '@/service/sicutiService';
 import LeaveDetailDialog from '@/components/leave/LeaveDetailDialog.vue';
 import LeaveFormDialog from '@/components/leave/LeaveFormDialog.vue';
@@ -212,6 +213,7 @@ function cancelRequest(req) {
         accept: async () => {
             try {
                 await leaveService.cancelLeave(id);
+                void syncFromBackend({ fresh: true });
                 toast.add({
                     severity: 'info',
                     summary: 'Cuti Dibatalkan',

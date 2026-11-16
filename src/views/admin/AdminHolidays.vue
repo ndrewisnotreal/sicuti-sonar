@@ -58,7 +58,7 @@ function deleteHoliday(item) {
         accept: async () => {
             try {
                 await adminService.deleteHoliday(item.id);
-                await syncFromBackend();
+                await syncFromBackend({ fresh: true });
                 toast.add({ severity: 'info', summary: 'Dihapus', detail: `Hari libur ${item.name} telah dihapus`, life: 3000 });
             } catch (err) {
                 toast.add({ severity: 'error', summary: 'Hari libur gagal dihapus', detail: err.message, life: 4000 });

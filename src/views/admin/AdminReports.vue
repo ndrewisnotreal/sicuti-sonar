@@ -230,13 +230,12 @@ async function exportExcel() {
     try {
         const types = ['leave-request', 'leave-balance', 'leave-type-summary'];
         const filenames = [
-            `laporan_cuti_${selectedYear.value}.csv`,
-            `rekap_saldo_${selectedYear.value}.csv`,
-            `rekap_jenis_cuti_${selectedYear.value}.csv`
+            `laporan_cuti_${selectedYear.value}.xlsx`,
+            `rekap_saldo_${selectedYear.value}.xlsx`,
+            `rekap_jenis_cuti_${selectedYear.value}.xlsx`
         ];
         await downloadExcel('/sicuti/report/export', { type: types[activeTab.value], ...exportParams.value }, filenames[activeTab.value]);
-        // Backend mengirim text/csv (report.controller.ts), jadi pesan menyebut CSV (audit-022 #11).
-        toast.add({ severity: 'success', summary: 'Ekspor Berhasil', detail: 'Berkas CSV diunduh (bisa dibuka di Excel).', life: 3000 });
+        toast.add({ severity: 'success', summary: 'Ekspor Berhasil', detail: 'Berkas Excel (.xlsx) diunduh.', life: 3000 });
     } catch (err) {
         toast.add({ severity: 'error', summary: 'Gagal Ekspor', detail: err.message, life: 4000 });
     } finally {
@@ -328,7 +327,7 @@ onMounted(loadData);
                     </Button>
                     <Button data-tour="export-excel" severity="success" size="small" class="text-xs font-bold flex items-center gap-1.5 !min-h-11 sm:!min-h-9" :disabled="activeLoading" :loading="exporting" @click="exportExcel">
                         <PhFileXls :size="14" weight="bold" aria-hidden="true" />
-                        <span>Ekspor CSV</span>
+                        <span>Ekspor Excel</span>
                     </Button>
                 </div>
             </div>

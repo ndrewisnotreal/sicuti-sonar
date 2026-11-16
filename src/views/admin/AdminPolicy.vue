@@ -46,7 +46,7 @@ async function save() {
         const res = await adminService.updatePolicy({ ...form.value });
         form.value = fromPolicy(res?.data ?? res);
         saved.value = { ...form.value };
-        await syncFromBackend();
+        await syncFromBackend({ fresh: true });
         toast.add({ severity: 'success', summary: 'Kebijakan disimpan', detail: 'Kebijakan cuti sudah diperbarui.', life: 3000 });
     } catch (err) {
         toast.add({ severity: 'error', summary: 'Kebijakan gagal disimpan', detail: err.message, life: 4000 });
