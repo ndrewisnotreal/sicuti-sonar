@@ -7,7 +7,7 @@ const READONLY = {
 export const TOUR_STEPS = {
     'admin.pengenalan': [
         {
-            title: 'Selamat datang di Lebur',
+            title: 'Selamat datang di SiCuti',
             text: 'Sebagai Admin Seksi, Anda mengelola data cuti divisi Anda: master data, pengajuan atas nama karyawan, saldo, laporan, dan audit trail. Semua data otomatis dibatasi ke divisi Anda.'
         },
         {

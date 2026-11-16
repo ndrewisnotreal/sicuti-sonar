@@ -96,7 +96,7 @@ onMounted(validate);
             <div class="max-w-xl mx-auto px-4 h-14 flex items-center gap-2.5">
                 <img :src="publicPath('logo-inalum.png')" alt="Logo PT INALUM" class="h-7 w-auto" />
                 <div class="leading-tight">
-                    <div class="font-bold text-primary">Lebur</div>
+                    <div class="font-bold text-primary">SiCuti</div>
                     <div class="text-xs text-muted-color">Validasi dokumen cuti</div>
                 </div>
             </div>
@@ -163,7 +163,7 @@ onMounted(validate);
         </main>
 
         <footer class="max-w-xl mx-auto px-4 pb-8 text-center text-xs text-muted-color">
-            Diverifikasi oleh Lebur · PT Indonesia Asahan Aluminium (Persero)
+            Diverifikasi oleh SiCuti · PT Indonesia Asahan Aluminium (Persero)
         </footer>
     </div>
 </template>

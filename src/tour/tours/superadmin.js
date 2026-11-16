@@ -1,7 +1,7 @@
 export const TOUR_STEPS = {
     'super.pengenalan': [
         {
-            title: 'Selamat datang di Lebur',
+            title: 'Selamat datang di SiCuti',
             text: 'Sebagai Super Admin, Anda mengelola seluruh aplikasi untuk semua divisi: master data, akun pengguna, hak akses, laporan, dan audit trail.'
         },
         {
