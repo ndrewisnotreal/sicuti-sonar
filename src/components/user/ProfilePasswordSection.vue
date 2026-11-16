@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { PhCheck, PhCircle } from '@phosphor-icons/vue';
+import PasswordToggleButton from '@/components/common/PasswordToggleButton.vue';
 import { passwordChecks as checkPassword } from '@/utils/passwordRules';
 
 const props = defineProps({
@@ -63,7 +64,10 @@ const pt = (field, error) => ({ pcInputText: { root: { 'aria-invalid': error ? '
                     :invalid="Boolean(errors.newPassword)"
                     :pt="pt('profile-new-password', errors.newPassword)"
                     class="text-xs"
-                />
+                >
+                    <template #unmaskicon="{ toggleCallback }"><PasswordToggleButton @toggle="toggleCallback" /></template>
+                    <template #maskicon="{ toggleCallback }"><PasswordToggleButton revealed @toggle="toggleCallback" /></template>
+                </Password>
                 <p v-if="errors.newPassword" id="profile-new-password-error" class="text-xs text-(--status-danger-fg) mt-1">{{ errors.newPassword }}</p>
             </div>
             <div>
@@ -81,7 +85,10 @@ const pt = (field, error) => ({ pcInputText: { root: { 'aria-invalid': error ? '
                     :invalid="Boolean(confirmError)"
                     :pt="pt('profile-confirm-password', confirmError)"
                     class="text-xs"
-                />
+                >
+                    <template #unmaskicon="{ toggleCallback }"><PasswordToggleButton @toggle="toggleCallback" /></template>
+                    <template #maskicon="{ toggleCallback }"><PasswordToggleButton revealed @toggle="toggleCallback" /></template>
+                </Password>
                 <p v-if="confirmError" id="profile-confirm-password-error" class="text-xs text-(--status-danger-fg) mt-1">{{ confirmError }}</p>
             </div>
         </div>
@@ -114,7 +121,10 @@ const pt = (field, error) => ({ pcInputText: { root: { 'aria-invalid': error ? '
                     :invalid="Boolean(errors.currentPassword)"
                     :pt="pt('profile-current-password', errors.currentPassword)"
                     class="text-xs"
-                />
+                >
+                    <template #unmaskicon="{ toggleCallback }"><PasswordToggleButton @toggle="toggleCallback" /></template>
+                    <template #maskicon="{ toggleCallback }"><PasswordToggleButton revealed @toggle="toggleCallback" /></template>
+                </Password>
                 <p v-if="errors.currentPassword" id="profile-current-password-error" class="text-xs text-(--status-danger-fg) mt-1">{{ errors.currentPassword }}</p>
                 <p v-else class="text-xs text-muted-color mt-1">Diperlukan untuk mengganti kata sandi.</p>
             </div>

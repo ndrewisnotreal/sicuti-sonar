@@ -7,11 +7,13 @@ let lastConfirm = null;
 vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: toastAdd }) }));
 vi.mock('primevue/useconfirm', () => ({ useConfirm: () => ({ require: (opts) => (lastConfirm = opts) }) }));
 vi.mock('@/service/approvalService', () => ({ approvalService: { processApproval: vi.fn() } }));
+vi.mock('@/service/leaveService', () => ({ leaveService: { getLeaveDetail: vi.fn() } }));
 vi.mock('@/service/sicutiService', async (orig) => ({ ...(await orig()), syncFromBackend: vi.fn() }));
 
 import ApprovalActionDialog from '@/components/approval/ApprovalActionDialog.vue';
 import { approvalService } from '@/service/approvalService';
 import { syncFromBackend } from '@/service/sicutiService';
+import { leaveService } from '@/service/leaveService';
 
 const DialogStub = defineComponent({
     name: 'Dialog',
@@ -133,6 +135,16 @@ describe('ApprovalActionDialog', () => {
         expect(toastAdd).toHaveBeenCalledWith({ severity: 'warn', summary: 'Sudah Diproses', detail: 'Anda sudah memproses pengajuan ini', life: 5000 });
         expect(w.emitted('update:visible')).toEqual([[false]]);
         expect(reload).toHaveBeenCalledTimes(1);
+    });
+
+    it('C-F8 menampilkan Pengganti Tugas dari detail bila daftar hanya membawa substitute_id', async () => {
+        leaveService.getLeaveDetail.mockResolvedValue({ substitute_name: 'Bayu Nugroho' });
+        const { w } = mountDialog({ request: { ...REQ, substitute_id: 'USR009' } });
+        await flushPromises();
+        expect(w.text()).toContain('Pengganti Tugas');
+        expect(w.text()).toContain('Bayu Nugroho');
+        const tanpa = mountDialog().w;
+        expect(tanpa.text()).not.toContain('Pengganti Tugas');
     });
 
     it('galat lain → toast "Gagal", dialog tetap terbuka, antrean tidak dimuat ulang', async () => {

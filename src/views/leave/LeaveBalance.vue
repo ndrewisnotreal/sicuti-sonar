@@ -156,7 +156,19 @@ const emptyText = computed(() => (balanceError.value || historyError.value ? 'Ri
                     <p class="text-xs text-muted-color mt-0.5">Penambahan dan pengurangan saldo cuti tahunan Anda</p>
                 </div>
                 <!-- Pilihan cepat pola Pemantauan, bukan tab (audit-028 #4). -->
-                <div role="group" aria-labelledby="balance-type-label" class="flex flex-wrap items-center gap-2">
+                <!-- Di HP chip diganti Select dengan nilai yang sama (audit-013 #3). -->
+                <div class="sm:hidden">
+                    <label for="balance-type-select" class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1">Jenis</label>
+                    <Select
+                        v-model="mutationTypeFilter"
+                        inputId="balance-type-select"
+                        :options="mutationChips.map((c) => ({ value: c.key, label: `${c.label} (${historyError ? '–' : c.count})` }))"
+                        optionLabel="label"
+                        optionValue="value"
+                        class="w-full !min-h-11"
+                    />
+                </div>
+                <div role="group" aria-labelledby="balance-type-label" class="hidden sm:flex flex-wrap items-center gap-2">
                     <span id="balance-type-label" class="text-xs font-medium text-surface-700 dark:text-surface-300 mr-1">Jenis</span>
                     <button
                         v-for="chip in mutationChips"

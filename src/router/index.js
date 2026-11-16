@@ -1,6 +1,7 @@
 import AppLayout from '@/layout/AppLayout.vue';
 import { createRouter, createWebHistory } from 'vue-router';
 import { currentUser, isAdmin, isSuperAdmin, isApprover, isApplicant, can } from '@/service/sicutiService';
+import { safeRedirect } from '@/utils/safeRedirect';
 
 const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
@@ -131,12 +132,6 @@ const router = createRouter({
                     name: 'admin-audit-trail',
                     component: () => import('@/views/admin/AdminAuditTrail.vue'),
                     meta: { requiresAuth: true, requiresAdmin: true, ability: 'dashboard_laporan.view_audit' }
-                },
-                {
-                    path: '/profile',
-                    name: 'profile',
-                    component: () => import('@/views/user/Profile.vue'),
-                    meta: { requiresAuth: true, ability: 'login_user.view_profile' }
                 }
             ]
         },
@@ -169,7 +164,10 @@ router.beforeEach((to) => {
     if (to.meta.public) return true;
 
     const isAuth = Boolean(currentUser.value);
-    if (to.name !== 'login' && !isAuth) return { name: 'login' };
+    if (to.name !== 'login' && !isAuth) {
+        const redirect = safeRedirect(to.fullPath, '');
+        return redirect && redirect !== '/' ? { name: 'login', query: { redirect } } : { name: 'login' };
+    }
     if (to.name === 'login') return isAuth ? { name: 'dashboard' } : true;
 
     const denied =

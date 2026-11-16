@@ -22,11 +22,13 @@
                     </IconField>
                 </div>
 
-                <div v-if="adminDivision">
+                <FilterToggle v-model="showFilters" :count="secondaryFilterCount" />
+
+                <div v-if="adminDivision" :class="{ 'max-lg:hidden': !showFilters }">
                     <span class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1">Divisi</span>
                     <p class="min-h-11 sm:min-h-9 flex items-center text-sm font-semibold text-surface-900 dark:text-surface-100">{{ adminDivision }}</p>
                 </div>
-                <div v-else-if="isSuper">
+                <div v-else-if="isSuper" :class="{ 'max-lg:hidden': !showFilters }">
                     <span id="mon-dept-label" class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1">Divisi</span>
                     <Select
                         v-model="departmentFilter"
@@ -43,7 +45,7 @@
                     <p v-if="departmentsError" id="mon-dept-error" class="mt-1.5 text-xs leading-relaxed text-(--status-danger-fg)">Pilihan divisi gagal dimuat.</p>
                 </div>
 
-                <div>
+                <div :class="{ 'max-lg:hidden': !showFilters }">
                     <span id="mon-type-label" class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1">Jenis cuti</span>
                     <Select
                         v-model="leaveTypeFilter"
@@ -60,22 +62,9 @@
                     <p v-if="leaveTypesError" id="mon-type-error" class="mt-1.5 text-xs leading-relaxed text-(--status-danger-fg)">Pilihan jenis cuti gagal dimuat.</p>
                 </div>
 
-                <div>
+                <div :class="{ 'max-lg:hidden': !showFilters }">
                     <span class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1" aria-hidden="true">Rentang tanggal cuti</span>
-                    <DatePicker
-                        v-model="dateRange"
-                        selectionMode="range"
-                        :manualInput="false"
-                        dateFormat="dd M yy"
-                        placeholder="Pilih rentang"
-                        showIcon
-                        iconDisplay="input"
-                        showButtonBar
-                        size="small"
-                        fluid
-                        inputClass="!min-h-11 sm:!min-h-9"
-                        aria-label="Rentang tanggal cuti"
-                    />
+                    <DateRangeFilter v-model="dateRange" label="Rentang tanggal cuti" input-class="!min-h-11 sm:!min-h-9" />
                 </div>
             </div>
 
@@ -85,7 +74,11 @@
             </div>
 
             <!-- Status sebagai baris pilihan cepat dengan jumlah per status (audit-019 #2). -->
-            <div role="group" aria-labelledby="mon-status-label" class="flex flex-wrap items-center gap-2">
+            <div class="sm:hidden">
+                <label for="mon-status-select" class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1">Status</label>
+                <Select v-model="statusSelect" inputId="mon-status-select" :options="statusSelectOptions" optionLabel="label" optionValue="value" class="w-full !min-h-11" />
+            </div>
+            <div role="group" aria-labelledby="mon-status-label" class="hidden sm:flex flex-wrap items-center gap-2">
                 <span id="mon-status-label" class="text-xs font-medium text-surface-700 dark:text-surface-300 mr-1">Status</span>
                 <button
                     v-for="s in statusChips"
@@ -232,6 +225,8 @@ import {
     STATUS_OPTIONS
 } from '@/service/sicutiService';
 import { PhMagnifyingGlass, PhEye } from '@phosphor-icons/vue';
+import FilterToggle from '@/components/common/FilterToggle.vue';
+import DateRangeFilter from '@/components/common/DateRangeFilter.vue';
 
 const props = defineProps({
     requests: {
@@ -281,6 +276,7 @@ const emit = defineEmits(['view-detail', 'refresh']);
 
 const searchQuery = ref('');
 const statusFilter = ref(null);
+const showFilters = ref(false);
 const leaveTypeFilter = ref(null);
 const departmentFilter = ref(null);
 const dateRange = ref(null);
@@ -304,10 +300,12 @@ function matchesNonStatus(r) {
         if (!matchCode && !matchName) return false;
     }
 
-    if (dateRange.value && dateRange.value[0]) {
-        const filterStart = new Date(dateRange.value[0]);
+    if (dateRange.value && (dateRange.value[0] || dateRange.value[1])) {
+        // Sisi kosong terbuka: hanya "Dari" = satu hari itu, hanya "Sampai" = semua s/d tanggal itu.
+        const [from, to] = dateRange.value;
+        const filterStart = from ? new Date(from) : new Date(0);
         filterStart.setHours(0, 0, 0, 0);
-        const filterEnd = dateRange.value[1] ? new Date(dateRange.value[1]) : new Date(filterStart);
+        const filterEnd = to ? new Date(to) : new Date(filterStart);
         filterEnd.setHours(23, 59, 59, 999);
 
         const rStart = new Date(r.start_date || r.startDate);
@@ -345,8 +343,20 @@ const statusChips = computed(() => {
     ];
 });
 
+// Di HP chip status diganti Select dengan nilai yang sama; 'all' menggantikan null (audit-013 #3).
+const statusSelectOptions = computed(() =>
+    statusChips.value.map((s) => ({ value: s.value ?? 'all', label: `${s.label} (${props.loadError && !props.staleData ? '–' : s.count})` }))
+);
+const statusSelect = computed({
+    get: () => statusFilter.value ?? 'all',
+    set: (val) => {
+        statusFilter.value = val === 'all' ? null : val;
+    }
+});
+
+const secondaryFilterCount = computed(() => [departmentFilter.value, leaveTypeFilter.value, dateRange.value?.[0] || dateRange.value?.[1]].filter(Boolean).length);
 const hasFilters = computed(() =>
-    Boolean(searchQuery.value.trim() || statusFilter.value || leaveTypeFilter.value || departmentFilter.value || dateRange.value?.[0])
+    Boolean(searchQuery.value.trim() || statusFilter.value || leaveTypeFilter.value || departmentFilter.value || dateRange.value?.[0] || dateRange.value?.[1])
 );
 
 function resetFilters() {

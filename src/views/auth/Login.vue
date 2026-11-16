@@ -1,15 +1,18 @@
 <script setup>
 import { publicPath } from '@/utils/publicPath';
 import { computed, ref, watch, nextTick } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import api, { LOGOUT_NOTICE_KEY } from '@/service/api';
 import { login } from '@/service/sicutiService';
 import { useLayout } from '@/layout/composables/layout';
 import { useToast } from 'primevue/usetoast';
 import { PhUser, PhSignIn, PhKey, PhLock, PhSun, PhMoon, PhCheck, PhCircle, PhSpinner } from '@phosphor-icons/vue';
 import { passwordChecks, passwordProblem } from '@/utils/passwordRules';
+import { safeRedirect } from '@/utils/safeRedirect';
+import PasswordToggleButton from '@/components/common/PasswordToggleButton.vue';
 
 const router = useRouter();
+const route = useRoute();
 const toast = useToast();
 const { isDarkTheme, toggleDarkMode } = useLayout();
 
@@ -63,7 +66,7 @@ async function handleLogin() {
             detail: `Selamat datang, ${res.user.name}`,
             life: 3000
         });
-        await router.push('/');
+        await router.push(safeRedirect(route.query.redirect));
     } else if (res.code === 'PASSWORD_EXPIRED' && res.data?.Token_login_API) {
         expired.value = { id_user: res.data.id_user, token: res.data.Token_login_API, passwordLama: pass };
         newPassword.value = '';
@@ -99,7 +102,7 @@ async function handleExpiredChange() {
         if (res.success) {
             sessionStorage.setItem('sct_just_logged_in', 'true');
             sessionStorage.setItem('sct_login_user', JSON.stringify({ name: res.user.name }));
-            await router.push('/');
+            await router.push(safeRedirect(route.query.redirect));
         } else {
             errorMessage.value = 'Kata sandi sudah diganti. Silakan masuk dengan kata sandi baru.';
         }
@@ -121,7 +124,7 @@ function cancelExpired(message = '') {
 </script>
 
 <template>
-    <div class="min-h-screen flex flex-col items-center justify-center p-4 relative bg-surface-50 dark:bg-surface-950 overflow-hidden">
+    <div class="min-h-svh flex flex-col items-center justify-center p-4 relative bg-surface-50 dark:bg-surface-950 overflow-hidden">
         <div class="absolute inset-0 bg-cover bg-center" :style="{ backgroundImage: `url('${publicPath('assets/inalum-login-illustration.webp')}')` }"></div>
         <div :class="['absolute inset-0', isDarkTheme ? 'bg-black/60' : 'bg-slate-900/40']"></div>
 
@@ -165,7 +168,10 @@ function cancelExpired(message = '') {
                         autocomplete="new-password"
                         :invalid="Boolean(fieldErrors['expired-new'])"
                         :pt="{ pcInputText: { root: { class: '!min-h-11', ...invalidAttrs('expired-new') } } }"
-                    />
+                    >
+                        <template #unmaskicon="{ toggleCallback }"><PasswordToggleButton @toggle="toggleCallback" /></template>
+                        <template #maskicon="{ toggleCallback }"><PasswordToggleButton revealed @toggle="toggleCallback" /></template>
+                    </Password>
                     <p v-if="fieldErrors['expired-new']" id="expired-new-error" class="text-xs text-(--status-danger-fg) mt-1">{{ fieldErrors['expired-new'] }}</p>
                     <ul class="grid grid-cols-2 gap-x-3 gap-y-1 mt-2 text-xs" aria-label="Syarat kata sandi">
                         <li v-for="c in expiredChecks" :key="c.label" class="flex items-center gap-1.5" :class="c.ok ? 'text-(--status-success-fg)' : 'text-muted-color'">
@@ -187,7 +193,10 @@ function cancelExpired(message = '') {
                         autocomplete="new-password"
                         :invalid="Boolean(fieldErrors['expired-confirm'])"
                         :pt="{ pcInputText: { root: { class: '!min-h-11', ...invalidAttrs('expired-confirm') } } }"
-                    />
+                    >
+                        <template #unmaskicon="{ toggleCallback }"><PasswordToggleButton @toggle="toggleCallback" /></template>
+                        <template #maskicon="{ toggleCallback }"><PasswordToggleButton revealed @toggle="toggleCallback" /></template>
+                    </Password>
                     <p v-if="fieldErrors['expired-confirm']" id="expired-confirm-error" class="text-xs text-(--status-danger-fg) mt-1">{{ fieldErrors['expired-confirm'] }}</p>
                 </div>
                 <div class="flex gap-2">
@@ -236,7 +245,10 @@ function cancelExpired(message = '') {
                             placeholder="Masukkan kata sandi"
                             :invalid="Boolean(fieldErrors['login-password'])"
                             :pt="{ pcInputText: { root: { class: '!min-h-11', ...invalidAttrs('login-password') } } }"
-                        />
+                        >
+                            <template #unmaskicon="{ toggleCallback }"><PasswordToggleButton @toggle="toggleCallback" /></template>
+                            <template #maskicon="{ toggleCallback }"><PasswordToggleButton revealed @toggle="toggleCallback" /></template>
+                        </Password>
                     </IconField>
                     <p v-if="fieldErrors['login-password']" id="login-password-error" class="text-xs text-(--status-danger-fg) mt-1">{{ fieldErrors['login-password'] }}</p>
                     <router-link to="/auth/forgot-password" class="inline-flex items-center min-h-11 sm:min-h-9 text-sm text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary rounded-border">Lupa kata sandi?</router-link>

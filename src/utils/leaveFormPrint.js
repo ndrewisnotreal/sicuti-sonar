@@ -45,6 +45,16 @@ export function formJenis(leaveTypeName) {
     return null;
 }
 
+// used_days backend menghitung cuti disetujui yang tanggal mulainya jatuh di period_start..period_end baris itu,
+// jadi baris yang memuat potongan pengajuan adalah yang periodenya mencakup tanggal mulai (bukan baris year = tahun mulai).
+// Tanpa kecocokan: kembali ke baris pertama (periode aktif), bukan menebak dari tahun.
+export function pickBalanceForLeave(balances, startDate) {
+    const list = Array.isArray(balances) ? balances : [];
+    const start = String(startDate || '').slice(0, 10);
+    const match = list.find((b) => b?.period_start && b?.period_end && start >= String(b.period_start).slice(0, 10) && start <= String(b.period_end).slice(0, 10));
+    return match || list[0] || null;
+}
+
 const lines = (arr) => arr.map((t) => `<div class="ln">${t === '' ? '&nbsp;' : t}</div>`).join('');
 
 export function publicAppOrigin() {

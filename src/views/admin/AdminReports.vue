@@ -9,7 +9,7 @@ import {
     formatDate,
     getStatusLabel,
     STATUS_OPTIONS,
-    YEAR_OPTIONS
+    CURRENT_YEAR
 } from '@/service/sicutiService';
 import { useToast } from 'primevue/usetoast';
 import { downloadExcel, printReportPdf } from '@/utils/reportExport';
@@ -17,6 +17,8 @@ import { PhFileXls, PhFileText, PhMagnifyingGlass, PhArrowsClockwise, PhChartBar
 import ReportLeaveHistoryTable from '@/components/admin/reports/ReportLeaveHistoryTable.vue';
 import ReportBalanceTable from '@/components/admin/reports/ReportBalanceTable.vue';
 import ReportLeaveTypeSummary from '@/components/admin/reports/ReportLeaveTypeSummary.vue';
+import FilterToggle from '@/components/common/FilterToggle.vue';
+import DateRangeFilter from '@/components/common/DateRangeFilter.vue';
 
 const toast = useToast();
 const loading = ref(false);
@@ -40,11 +42,20 @@ const summaryError = ref(false);
 const leaveTypesError = ref(false);
 const departmentsError = ref(false);
 
-const selectedYear = ref(new Date().getFullYear());
-const yearOptions = YEAR_OPTIONS;
+const selectedYear = ref(CURRENT_YEAR);
+// Tahun depan ikut tersedia: pengajuan untuk tahun berikutnya sudah bisa dibuat (audit C-F4).
+const yearOptions = [CURRENT_YEAR + 1, CURRENT_YEAR, CURRENT_YEAR - 1].map((y) => ({ label: `Tahun ${y}`, value: y }));
 const departmentFilter = ref(null);
 const leaveTypeFilter = ref(null);
 const statusFilter = ref(null);
+// Di bawah lg hanya Cari dan Tahun yang langsung tampil; sisanya di balik tombol filter (audit-013 #4).
+const showFilters = ref(false);
+const secondaryFilterCount = computed(() => {
+    const active = [!adminDivision.value && departmentFilter.value];
+    if (activeTab.value !== 1) active.push(dateRange.value?.[0] || dateRange.value?.[1]);
+    if (activeTab.value === 0) active.push(leaveTypeFilter.value, statusFilter.value);
+    return active.filter(Boolean).length;
+});
 const searchQuery = ref('');
 const dateRange = ref(null);
 const statusOptions = STATUS_OPTIONS;
@@ -57,6 +68,9 @@ function iso(d) {
 const rangeStart = computed(() => iso(dateRange.value?.[0]));
 const rangeEnd = computed(() => iso(dateRange.value?.[1] || dateRange.value?.[0]));
 const targetDept = computed(() => adminDivision.value || departmentFilter.value || null);
+// Backend memfilter `year` berdasar tahun mulai cuti; bila rentang dipilih, rentang itu sendiri yang membatasi data (audit C-F4).
+const hasRange = computed(() => Boolean(rangeStart.value || rangeEnd.value));
+const yearParam = computed(() => (hasRange.value ? undefined : selectedYear.value));
 
 // Ekspor hanya membawa filter yang terlihat di tab aktif, sehingga berkas sama dengan layar (audit-022 #2).
 const exportParams = computed(() => {
@@ -65,6 +79,7 @@ const exportParams = computed(() => {
     if (activeTab.value === 0) {
         return {
             ...base,
+            year: yearParam.value,
             kd_leave_type: leaveTypeFilter.value || undefined,
             status: statusFilter.value || undefined,
             start_date: rangeStart.value,
@@ -73,7 +88,7 @@ const exportParams = computed(() => {
         };
     }
     if (activeTab.value === 1) return { ...base, search };
-    return { ...base, start_date: rangeStart.value, end_date: rangeEnd.value };
+    return { ...base, year: yearParam.value, start_date: rangeStart.value, end_date: rangeEnd.value };
 });
 
 async function loadSummary() {
@@ -81,7 +96,7 @@ async function loadSummary() {
     summaryError.value = false;
     try {
         const res = await api.get('/sicuti/report/leave-type-summary', {
-            year: selectedYear.value,
+            year: yearParam.value,
             kd_dept: targetDept.value || undefined,
             start_date: rangeStart.value,
             end_date: rangeEnd.value
@@ -103,7 +118,7 @@ async function loadData() {
     departmentsError.value = false;
     // Pemanggilan dan parameter sama; tiap sumber kini dicatat gagal/berhasil sendiri.
     const [rep, bal, types, depts] = await Promise.allSettled([
-        adminService.getLeaveRequests({ year: selectedYear.value }),
+        adminService.getLeaveRequests({ year: yearParam.value }),
         adminService.getBalances(selectedYear.value),
         adminService.getLeaveTypes(),
         adminService.getDepartments()
@@ -135,7 +150,11 @@ async function loadData() {
 }
 
 watch(selectedYear, loadData);
-watch([departmentFilter, dateRange], loadSummary);
+// Rentang tanggal menggantikan Tahun: pindah antara ada/tanpa rentang memuat ulang pengajuan, ubah tanggal memuat ulang rekap.
+watch(hasRange, loadData);
+watch([departmentFilter, dateRange], () => {
+    if (!loading.value) loadSummary();
+});
 
 const leaveTypeOptions = computed(() => [
     { label: 'Semua Jenis Cuti', value: null },
@@ -206,8 +225,10 @@ const emptyText = computed(() => {
 
 const remaining = (b) => (b.remaining !== undefined ? b.remaining : Number(b.annual_quota || 0) + Number(b.carry_over_days || 0) - Number(b.used_days || 0));
 const scopeLabel = computed(() => {
-    const parts = [targetDept.value ? `Divisi ${targetDept.value}` : 'Semua divisi', `Tahun ${selectedYear.value}`];
-    if (rangeStart.value && activeTab.value !== 1) parts.push(`${formatDate(rangeStart.value)} – ${formatDate(rangeEnd.value)}`);
+    const rangeOnly = hasRange.value && activeTab.value !== 1;
+    const parts = [targetDept.value ? `Divisi ${targetDept.value}` : 'Semua divisi'];
+    if (!rangeOnly) parts.push(`Tahun ${selectedYear.value}`);
+    else parts.push(rangeStart.value ? `${formatDate(rangeStart.value)} – ${formatDate(rangeEnd.value)}` : `s/d ${formatDate(rangeEnd.value)}`);
     return parts.join(' · ');
 });
 
@@ -357,11 +378,12 @@ onMounted(loadData);
                             <span id="rep-year-label" class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1">Tahun</span>
                             <Select v-model="selectedYear" :options="yearOptions" optionLabel="label" optionValue="value" placeholder="Pilih Tahun" ariaLabelledby="rep-year-label" class="w-full text-xs !min-h-11 sm:!min-h-9" size="small" />
                         </div>
-                        <div v-if="adminDivision">
+                        <FilterToggle v-model="showFilters" :count="secondaryFilterCount" />
+                        <div v-if="adminDivision" :class="{ 'max-lg:hidden': !showFilters }">
                             <span class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1">Divisi</span>
                             <p class="min-h-11 sm:min-h-9 flex items-center text-sm font-semibold text-surface-900 dark:text-surface-100">{{ adminDivision }}</p>
                         </div>
-                        <div v-else-if="isSuper">
+                        <div v-else-if="isSuper" :class="{ 'max-lg:hidden': !showFilters }">
                             <span id="rep-dept-label" class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1">Divisi</span>
                             <Select
                                 v-model="departmentFilter"
@@ -375,29 +397,16 @@ onMounted(loadData);
                                 size="small"
                             />
                         </div>
-                        <div v-if="activeTab !== 1">
+                        <div v-if="activeTab !== 1" :class="{ 'max-lg:hidden': !showFilters }">
                             <span class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1" aria-hidden="true">Rentang tanggal cuti</span>
-                            <DatePicker
-                                v-model="dateRange"
-                                selectionMode="range"
-                                :manualInput="false"
-                                dateFormat="dd M yy"
-                                placeholder="Semua tanggal"
-                                showIcon
-                                iconDisplay="input"
-                                showButtonBar
-                                size="small"
-                                fluid
-                                inputClass="text-xs !min-h-11 sm:!min-h-9"
-                                aria-label="Rentang tanggal cuti"
-                            />
+                            <DateRangeFilter v-model="dateRange" label="Rentang tanggal cuti" />
                         </div>
                         <template v-if="activeTab === 0">
-                            <div>
+                            <div :class="{ 'max-lg:hidden': !showFilters }">
                                 <span id="rep-type-label" class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1">Jenis cuti</span>
                                 <Select v-model="leaveTypeFilter" :options="leaveTypeOptions" optionLabel="label" optionValue="value" placeholder="Semua Jenis Cuti" ariaLabelledby="rep-type-label" class="w-full text-xs !min-h-11 sm:!min-h-9" :disabled="leaveTypesError && !leaveTypes.length" size="small" />
                             </div>
-                            <div>
+                            <div :class="{ 'max-lg:hidden': !showFilters }">
                                 <span id="rep-status-label" class="block text-xs font-medium text-surface-700 dark:text-surface-300 mb-1">Status</span>
                                 <Select v-model="statusFilter" :options="statusOptions" optionLabel="label" optionValue="value" placeholder="Semua Status" ariaLabelledby="rep-status-label" class="w-full text-xs !min-h-11 sm:!min-h-9" size="small" />
                             </div>

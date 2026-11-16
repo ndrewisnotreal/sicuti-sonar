@@ -7,7 +7,7 @@ const { isDarkTheme } = useLayout();
 </script>
 
 <template>
-    <div class="min-h-screen flex flex-col items-center justify-center p-4 relative bg-surface-50 dark:bg-surface-950 overflow-hidden">
+    <div class="min-h-svh flex flex-col items-center justify-center p-4 relative bg-surface-50 dark:bg-surface-950 overflow-hidden">
         <!-- Latar sama dengan Login: foto digelapkan sesuai tema, tanpa blur berlapis (audit-033 #2). -->
         <div class="absolute inset-0 bg-cover bg-center" :style="{ backgroundImage: `url('${publicPath('assets/Pabrik-INALUM.jpg')}')` }"></div>
         <div :class="['absolute inset-0', isDarkTheme ? 'bg-black/60' : 'bg-slate-900/40']"></div>
