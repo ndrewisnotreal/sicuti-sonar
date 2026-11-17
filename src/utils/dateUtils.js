@@ -1,7 +1,8 @@
 // shortcut: dihitung sekali saat modul dimuat, jadi tab yang tetap terbuka melewati 1 Januari memakai tahun lama sampai dimuat ulang; ubah jadi fungsi bila itu jadi keluhan.
 export const CURRENT_YEAR = new Date().getFullYear();
 
-export const YEAR_OPTIONS = [CURRENT_YEAR, CURRENT_YEAR - 1].map((y) => ({ label: `Tahun ${y}`, value: y }));
+// Tahun depan ikut: cuti tahun depan boleh diajukan sekarang dan memotong saldo tahun itu.
+export const YEAR_OPTIONS = [CURRENT_YEAR + 1, CURRENT_YEAR, CURRENT_YEAR - 1].map((y) => ({ label: `Tahun ${y}`, value: y }));
 
 export function formatDate(dateStr) {
     if (!dateStr) return '-';
