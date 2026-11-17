@@ -3,10 +3,11 @@ import { flushPromises, mount } from '@vue/test-utils';
 
 const getLeaveTypes = vi.fn();
 const upsertLeaveType = vi.fn();
+const deleteLeaveType = vi.fn();
 const toastAdd = vi.fn();
 const confirmRequire = vi.fn();
 vi.mock('@/service/adminService', () => ({
-    adminService: { getLeaveTypes: (...a) => getLeaveTypes(...a), upsertLeaveType: (...a) => upsertLeaveType(...a) }
+    adminService: { getLeaveTypes: (...a) => getLeaveTypes(...a), upsertLeaveType: (...a) => upsertLeaveType(...a), deleteLeaveType: (...a) => deleteLeaveType(...a) }
 }));
 vi.mock('primevue/usetoast', () => ({ useToast: () => ({ add: toastAdd }) }));
 vi.mock('primevue/useconfirm', () => ({ useConfirm: () => ({ require: (opts) => confirmRequire(opts) }) }));
@@ -111,5 +112,33 @@ describe('Master Jenis Cuti: state muat, kosong, dan gagal', () => {
         await flushPromises();
         expect(confirmRequire).not.toHaveBeenCalled();
         expect(upsertLeaveType).toHaveBeenCalledWith(expect.objectContaining({ kd_leave_type: 'LT002', is_active: true }));
+    });
+
+    it('hapus jenis cuti meminta konfirmasi, mengirim id yang benar, lalu memuat ulang daftar', async () => {
+        getLeaveTypes.mockResolvedValue(raw);
+        deleteLeaveType.mockResolvedValueOnce({});
+        const w = mount(AdminLeaveTypes, { global: { stubs: viewStubs } });
+        await flushPromises();
+        await w.find('ul').find('button[aria-label="Hapus Cuti Sakit"]').trigger('click');
+        expect(deleteLeaveType).not.toHaveBeenCalled();
+        expect(confirmRequire).toHaveBeenCalledWith(expect.objectContaining({ header: 'Hapus jenis cuti?' }));
+        await confirmRequire.mock.calls[0][0].accept();
+        await flushPromises();
+        expect(deleteLeaveType).toHaveBeenCalledWith('LT002');
+        expect(getLeaveTypes).toHaveBeenCalledTimes(2);
+        expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ summary: 'Dihapus' }));
+    });
+
+    it('hapus yang ditolak backend menampilkan pesan galat', async () => {
+        getLeaveTypes.mockResolvedValue(raw);
+        deleteLeaveType.mockRejectedValueOnce(new Error('Jenis cuti LT002 tidak ditemukan'));
+        const w = mount(AdminLeaveTypes, { global: { stubs: viewStubs } });
+        await flushPromises();
+        await w.find('ul').find('button[aria-label="Hapus Cuti Sakit"]').trigger('click');
+        await confirmRequire.mock.calls[0][0].accept();
+        await flushPromises();
+        expect(toastAdd).toHaveBeenCalledWith(
+            expect.objectContaining({ severity: 'error', summary: 'Jenis cuti gagal dihapus', detail: 'Jenis cuti LT002 tidak ditemukan' })
+        );
     });
 });
