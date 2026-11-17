@@ -86,4 +86,20 @@ describe('LeaveFormDialog validasi inline', () => {
         expect(document.activeElement?.id).not.toBe('leave-start-date');
         w.unmount();
     });
+
+    it('tanggal mulai di tahun depan memuat saldo dan hari libur tahun itu', async () => {
+        const { leaveService } = await import('@/service/leaveService');
+        const nextYear = new Date().getFullYear() + 1;
+        const w = mount(LeaveFormDialog, { props: { visible: true }, global: { stubs } });
+        await flushPromises();
+        leaveService.getBalances.mockClear();
+        leaveService.getHolidays.mockClear();
+
+        w.findAllComponents({ name: 'DatePicker' })[0].vm.$emit('update:modelValue', new Date(nextYear, 0, 10));
+        await flushPromises();
+
+        expect(leaveService.getBalances).toHaveBeenCalledWith({ year: nextYear });
+        expect(leaveService.getHolidays).toHaveBeenCalledWith(nextYear);
+        w.unmount();
+    });
 });

@@ -69,9 +69,7 @@ describe('dateUtils', () => {
 
     it('CURRENT_YEAR and YEAR_OPTIONS have correct values', () => {
         expect(CURRENT_YEAR).toBe(new Date().getFullYear());
-        expect(YEAR_OPTIONS.length).toBe(2);
-        expect(YEAR_OPTIONS[0].value).toBe(CURRENT_YEAR);
-        expect(YEAR_OPTIONS[1].value).toBe(CURRENT_YEAR - 1);
+        expect(YEAR_OPTIONS.map((o) => o.value)).toEqual([CURRENT_YEAR + 1, CURRENT_YEAR, CURRENT_YEAR - 1]);
     });
 });
 
