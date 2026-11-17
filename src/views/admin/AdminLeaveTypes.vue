@@ -4,7 +4,7 @@ import { isSuperAdmin, can, setActiveLeaveTypes } from '@/service/sicutiService'
 import { adminService } from '@/service/adminService';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
-import { PhPlus, PhPencilSimple, PhProhibit, PhCheck } from '@phosphor-icons/vue';
+import { PhPlus, PhPencilSimple, PhProhibit, PhCheck, PhTrash } from '@phosphor-icons/vue';
 import ReadOnlyNotice from '@/components/common/ReadOnlyNotice.vue';
 import LeaveTypeFormDialog from '@/components/admin/LeaveTypeFormDialog.vue';
 
@@ -146,6 +146,27 @@ async function applyStatus(item) {
     }
 }
 
+function deleteType(item) {
+    confirm.require({
+        header: 'Hapus jenis cuti?',
+        // Backend soft delete tanpa endpoint pemulihan: beri tahu bahwa ini tidak bisa dibatalkan.
+        message: `${item.name} akan dihapus dari daftar dan tidak bisa dipulihkan dari aplikasi. Pengajuan yang sudah ada tidak berubah. Jika hanya ingin menyembunyikan sementara, gunakan Nonaktifkan.`,
+        acceptLabel: 'Hapus',
+        rejectLabel: 'Batal',
+        acceptProps: { severity: 'danger' },
+        rejectProps: { severity: 'secondary', outlined: true },
+        accept: async () => {
+            try {
+                await adminService.deleteLeaveType(item.id);
+                await load();
+                toast.add({ severity: 'info', summary: 'Dihapus', detail: `Jenis cuti ${item.name} telah dihapus`, life: 3000 });
+            } catch (err) {
+                toast.add({ severity: 'error', summary: 'Jenis cuti gagal dihapus', detail: err.message, life: 4000 });
+            }
+        }
+    });
+}
+
 onMounted(load);
 </script>
 
@@ -221,6 +242,10 @@ onMounted(load);
                                 <PhCheck v-else :size="14" weight="bold" aria-hidden="true" />
                                 <span>{{ data.isActive ? 'Nonaktifkan' : 'Aktifkan' }}</span>
                             </Button>
+                            <Button severity="danger" outlined size="small" class="col-span-2 text-xs !min-h-11 flex items-center justify-center gap-1.5" :aria-label="`Hapus ${data.name}`" @click="deleteType(data)">
+                                <PhTrash :size="14" weight="bold" aria-hidden="true" />
+                                <span>Hapus</span>
+                            </Button>
                         </div>
                     </li>
                 </ul>
@@ -291,6 +316,15 @@ onMounted(load);
                                 >
                                     <PhProhibit v-if="data.isActive" :size="14" weight="bold" aria-hidden="true" />
                                     <PhCheck v-else :size="14" weight="bold" aria-hidden="true" />
+                                </button>
+                                <button
+                                    type="button"
+                                    class="w-9 h-9 flex items-center justify-center text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-border transition-colors cursor-pointer"
+                                    :aria-label="`Hapus ${data.name}`"
+                                    title="Hapus"
+                                    @click="deleteType(data)"
+                                >
+                                    <PhTrash :size="14" weight="bold" aria-hidden="true" />
                                 </button>
                             </div>
                         </template>
