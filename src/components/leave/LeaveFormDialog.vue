@@ -235,20 +235,33 @@ function resetForm() {
     formErrors.value = {};
 }
 
+// Saldo dan hari libur mengikuti tahun tanggal mulai, karena backend memotong saldo tahun itu.
+let loadedYear = null;
+let yearSeq = 0;
+async function loadYearData(year) {
+    const seq = ++yearSeq;
+    loadedYear = year;
+    const [bals, hols] = await Promise.all([leaveService.getBalances({ year }).catch(() => []), leaveService.getHolidays(year).catch(() => [])]);
+    // Tanggal diganti cepat: hanya hasil tahun terakhir yang dipakai.
+    if (seq !== yearSeq) return;
+    balances.value = Array.isArray(bals) ? bals : bals ? [bals] : [];
+    holidays.value = Array.isArray(hols) ? hols : [];
+}
+
+watch(currentYear, (year) => {
+    if (props.visible && loadedYear !== null && year !== loadedYear) loadYearData(year);
+});
+
 async function loadInitialData() {
     loadingInit.value = true;
     try {
-        const currentY = new Date().getFullYear();
-        const [types, bals, hols, users] = await Promise.all([
+        const [types, users] = await Promise.all([
             leaveService.getLeaveTypes(false).catch(() => []),
-            leaveService.getBalances({ year: currentY }).catch(() => []),
-            leaveService.getHolidays(currentY).catch(() => []),
-            leaveService.getColleagues().catch(() => [])
+            leaveService.getColleagues().catch(() => []),
+            loadYearData(currentYear.value)
         ]);
 
         leaveTypes.value = Array.isArray(types) ? types : [];
-        balances.value = Array.isArray(bals) ? bals : (bals ? [bals] : []);
-        holidays.value = Array.isArray(hols) ? hols : [];
         colleagues.value = Array.isArray(users) ? users : [];
 
         if (isEditMode.value) {
