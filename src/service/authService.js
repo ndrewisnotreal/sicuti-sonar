@@ -1,6 +1,7 @@
 import { ref } from 'vue';
 import { getEncryptedItem, setEncryptedItem } from '@/utils/encryption';
 import api, { clearAuth } from './api.js';
+import { sealFields } from './secretSeal.js';
 
 const AUTH_STORAGE_KEY = 'sicuti_auth';
 const MENUS_STORAGE_KEY = 'sicuti_user_menus';
@@ -39,10 +40,14 @@ function rememberMenu(data) {
 export const authService = {
     async login(username, password) {
         // Password tidak di-trim: backend menyimpan hash password apa adanya, termasuk spasi.
-        const payload = {
-            username: username.trim(),
-            password
-        };
+        // Password disegel dulu supaya tidak terbaca di payload (tab Network).
+        const payload = await sealFields(
+            {
+                username: username.trim(),
+                password
+            },
+            ['password']
+        );
         const res = await api.post('/auth/authorize', payload);
         const data = res?.data || res;
         setAbilities(data?.abilities);
@@ -119,7 +124,7 @@ export const authService = {
     },
 
     async changePassword(payload) {
-        const res = await api.put('/auth/password', payload);
+        const res = await api.put('/auth/password', await sealFields(payload, ['current_password', 'new_password', 'confirm_password']));
         return res?.data || res;
     }
 };
