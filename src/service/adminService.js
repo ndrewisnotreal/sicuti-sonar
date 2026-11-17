@@ -1,4 +1,5 @@
 import api from './api';
+import { sealFields } from './secretSeal';
 import { statusReasonLabel } from './statusReason';
 
 export const adminService = {
@@ -12,12 +13,13 @@ export const adminService = {
     },
 
     async createUser(data) {
-        const res = await api.post('/master/user', data);
+        // Kata sandi akun baru disegel supaya tidak terbaca di payload.
+        const res = await api.post('/master/user', await sealFields(data, ['password']));
         return res?.data || res;
     },
 
     async updateUser(data) {
-        const res = await api.put('/master/user', data);
+        const res = await api.put('/master/user', await sealFields(data, ['password']));
         return res?.data || res;
     },
 
