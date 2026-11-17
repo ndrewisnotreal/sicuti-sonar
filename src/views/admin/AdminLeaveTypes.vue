@@ -149,8 +149,8 @@ async function applyStatus(item) {
 function deleteType(item) {
     confirm.require({
         header: 'Hapus jenis cuti?',
-        // Backend soft delete tanpa endpoint pemulihan: beri tahu bahwa ini tidak bisa dibatalkan.
-        message: `${item.name} akan dihapus dari daftar dan tidak bisa dipulihkan dari aplikasi. Pengajuan yang sudah ada tidak berubah. Jika hanya ingin menyembunyikan sementara, gunakan Nonaktifkan.`,
+        // Backend tidak punya endpoint pemulihan, jadi arahkan ke Nonaktifkan untuk yang sementara.
+        message: `${item.name} akan dihapus permanen. Pilih Nonaktifkan jika hanya ingin menyembunyikannya.`,
         acceptLabel: 'Hapus',
         rejectLabel: 'Batal',
         acceptProps: { severity: 'danger' },
