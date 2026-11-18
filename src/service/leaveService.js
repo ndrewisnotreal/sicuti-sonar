@@ -135,6 +135,8 @@ export const leaveService = {
         const history = Array.isArray(historyRes?.data) ? historyRes.data : Array.isArray(historyRes) ? historyRes : [];
         for (const m of history) {
             const kind = String(m.type || '').toLowerCase();
+            // Carry over otomatis sudah tampil sebagai "Sisa cuti tahun lalu" di atas; dicatat dua kali akan menggandakan total masuk.
+            if (kind === 'carry_over') continue;
             const isCredit = ['credit', 'refund', 'init', 'tambah', 'carry_over'].includes(kind) || (kind === 'adjust' && Number(m.amount) >= 0);
             mutations.push({
                 id: m.id_history || m.id,

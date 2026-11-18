@@ -31,6 +31,7 @@ const HISTORY_LABEL = {
     DEDUCT: 'Pemakaian',
     REFUND: 'Pengembalian',
     ADJUST: 'Penyesuaian admin',
+    CARRY_OVER: 'Carry over otomatis',
     EXPIRED: 'Carry over hangus',
     INIT: 'Saldo awal'
 };
