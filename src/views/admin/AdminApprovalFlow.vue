@@ -30,7 +30,9 @@ const departments = ref([]);
 const approverRoles = ref([]);
 const eligibleApprovers = ref([]);
 
-const selectedTemplateId = ref('');
+// Templat terakhir dipilih bertahan selama tab terbuka, jadi tidak kembali ke templat pertama setelah pindah menu.
+const TEMPLATE_KEY = 'sicuti_approval_template';
+const selectedTemplateId = ref(sessionStorage.getItem(TEMPLATE_KEY) || '');
 const flows = ref([]);
 const members = ref([]);
 
@@ -112,6 +114,8 @@ function loadTemplateDetail(templateId) {
 }
 
 watch(selectedTemplateId, (newId) => {
+    if (newId) sessionStorage.setItem(TEMPLATE_KEY, newId);
+    else sessionStorage.removeItem(TEMPLATE_KEY);
     if (newId) loadTemplateDetail(newId);
     else {
         flows.value = [];

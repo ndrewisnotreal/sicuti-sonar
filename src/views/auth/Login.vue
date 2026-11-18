@@ -4,6 +4,7 @@ import { computed, ref, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import api, { LOGOUT_NOTICE_KEY } from '@/service/api';
 import { login } from '@/service/sicutiService';
+import { sealFields } from '@/service/secretSeal';
 import { useLayout } from '@/layout/composables/layout';
 import { useToast } from 'primevue/usetoast';
 import { PhUser, PhSignIn, PhKey, PhLock, PhSun, PhMoon, PhCheck, PhCircle, PhSpinner } from '@phosphor-icons/vue';
@@ -89,12 +90,18 @@ async function handleExpiredChange() {
     if (focusFirstError(['expired-new', 'expired-confirm'])) return;
     submitting.value = true;
     try {
-        await api.post('/auth/expired', {
-            id_user: expired.value.id_user,
-            password_lama: expired.value.passwordLama,
-            password_baru: newPassword.value,
-            Token_login_API: expired.value.token
-        });
+        await api.post(
+            '/auth/expired',
+            await sealFields(
+                {
+                    id_user: expired.value.id_user,
+                    password_lama: expired.value.passwordLama,
+                    password_baru: newPassword.value,
+                    Token_login_API: expired.value.token
+                },
+                ['password_lama', 'password_baru']
+            )
+        );
         toast.add({ severity: 'success', summary: 'Kata sandi diperbarui', detail: 'Kata sandi baru sudah aktif.', life: 3000 });
         const res = await login(identifier.value.trim(), newPassword.value);
         expired.value = null;

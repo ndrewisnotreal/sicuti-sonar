@@ -50,7 +50,8 @@ watch(
                 kd_dept: item.kd_dept || '-',
                 year: item.year || CURRENT_YEAR,
                 annual_quota: Number(item.annual_quota ?? defaultAnnualQuota()),
-                carry_over_days: Number(item.carry_over_days ?? 0),
+                // Nilai yang diberikan, bukan yang terhitung: setelah hangus, carry_over_days hanya bagian yang terpakai.
+                carry_over_days: Number(item.carry_over_granted ?? item.carry_over_days ?? 0),
                 used_days: Number(item.used_days ?? 0),
                 carry_over_expiry_date: item.carry_over_expiry_date ? String(item.carry_over_expiry_date).slice(0, 10) : '',
                 reason: ''
@@ -82,7 +83,19 @@ const remainingBefore = computed(() => {
     if (!b) return 0;
     return b.remaining ?? Number(b.annual_quota || 0) + Number(b.carry_over_days || 0) - Number(b.used_days || 0);
 });
-const remainingAfter = computed(() => Number(editingBalance.value.annual_quota || 0) + Number(editingBalance.value.carry_over_days || 0) - Number(editingBalance.value.used_days || 0));
+// Carry over yang sudah hangus hanya terhitung sebesar bagian yang terpakai sebelum hangus (sama dengan backend).
+// Acuan: hari ini, dibatasi ke dalam periode saldo yang sedang diubah.
+const remainingAfter = computed(() => {
+    const e = editingBalance.value;
+    const b = props.balanceData || {};
+    const carry = Number(e.carry_over_days || 0);
+    const expiry = e.carry_over_expiry_date || String(b.carry_over_expiry_date || '').slice(0, 10);
+    let asOf = toIso(new Date());
+    if (b.period_start && asOf < String(b.period_start).slice(0, 10)) asOf = String(b.period_start).slice(0, 10);
+    if (b.period_end && asOf > String(b.period_end).slice(0, 10)) asOf = String(b.period_end).slice(0, 10);
+    const counted = expiry && asOf > expiry ? Math.min(carry, Number(b.carry_over_used ?? 0)) : carry;
+    return Number(e.annual_quota || 0) + counted - Number(e.used_days || 0);
+});
 
 watch(
     () => editingBalance.value.reason,

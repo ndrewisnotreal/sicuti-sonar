@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/service/api', () => ({
-    default: { get: vi.fn(), post: vi.fn() },
+    default: { get: vi.fn(), post: vi.fn(), put: vi.fn() },
     clearAuth: vi.fn()
 }));
+// Penyegelan diuji sendiri di secretSeal.test.js; di sini cukup dipastikan field mana yang diminta disegel.
+vi.mock('@/service/secretSeal', () => ({ sealFields: vi.fn(async (payload) => payload) }));
 
 const LOGIN_RES = {
     data: {
@@ -17,8 +19,9 @@ const LOGIN_RES = {
 async function freshModules() {
     vi.resetModules();
     const api = (await import('@/service/api')).default;
+    const { sealFields } = await import('@/service/secretSeal');
     const { authService, userAbilities } = await import('@/service/authService');
-    return { api, authService, userAbilities };
+    return { api, authService, userAbilities, sealFields };
 }
 
 describe('authService menu & izin', () => {
@@ -41,6 +44,26 @@ describe('authService menu & izin', () => {
         api.post.mockResolvedValue(LOGIN_RES);
         await authService.login('  OS24980032 ', ' Rahasia1! ');
         expect(api.post).toHaveBeenCalledWith('/auth/authorize', { username: 'OS24980032', password: ' Rahasia1! ' });
+    });
+
+    it('login: password disegel sebelum dikirim, yang terkirim adalah hasil segelnya', async () => {
+        const { api, authService, sealFields } = await freshModules();
+        sealFields.mockResolvedValueOnce({ username: 'OS24980032', password: 'sealed.v1.AAAA' });
+        api.post.mockResolvedValue(LOGIN_RES);
+        await authService.login('OS24980032', 'password123');
+        expect(sealFields).toHaveBeenCalledWith({ username: 'OS24980032', password: 'password123' }, ['password']);
+        expect(api.post).toHaveBeenCalledWith('/auth/authorize', { username: 'OS24980032', password: 'sealed.v1.AAAA' });
+    });
+
+    it('ganti password: ketiga field password disegel', async () => {
+        const { api, authService, sealFields } = await freshModules();
+        const payload = { current_password: 'password123', new_password: 'PasswordBaru1!', confirm_password: 'PasswordBaru1!' };
+        const sealed = { current_password: 'sealed.v1.A', new_password: 'sealed.v1.B', confirm_password: 'sealed.v1.C' };
+        sealFields.mockResolvedValueOnce(sealed);
+        api.put.mockResolvedValue({ data: { message: 'ok' } });
+        await authService.changePassword(payload);
+        expect(sealFields).toHaveBeenCalledWith(payload, ['current_password', 'new_password', 'confirm_password']);
+        expect(api.put).toHaveBeenCalledWith('/auth/password', sealed);
     });
 
     it('getMenu tepat setelah login memakai data login (tidak meminta ulang), kecuali dipaksa', async () => {

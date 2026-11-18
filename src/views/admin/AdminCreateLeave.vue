@@ -15,6 +15,7 @@ import {
     ROLE_LABELS
 } from '@/service/sicutiService';
 import { latestEndDate } from '@/utils/workingDays';
+import LeaveAttachmentUpload from '@/components/leave/LeaveAttachmentUpload.vue';
 import { PhFilePlus, PhPaperPlaneRight } from '@phosphor-icons/vue';
 
 const toast = useToast();
@@ -22,7 +23,8 @@ const confirm = useConfirm();
 const router = useRouter();
 const saving = ref(false);
 
-const form = ref({ userId: null, leaveTypeId: null, startDate: null, endDate: null, substituteId: null, reason: '' });
+// document: berkas dari LeaveAttachmentUpload ({ file, name, size }), diunggah saat Buat Pengajuan.
+const form = ref({ userId: null, leaveTypeId: null, startDate: null, endDate: null, substituteId: null, reason: '', document: null });
 
 const applicantIds = computed(() => new Set(sicutiState.leaveBalances.map((b) => b.userId)));
 const employees = computed(() =>
@@ -45,11 +47,22 @@ watch(maxEndDate, (max) => {
     if (max && form.value.endDate && form.value.endDate > max) form.value.endDate = max;
 });
 
+// Jenis cuti wajib dokumen (mis. Cuti Menikah): backend menolak pengajuan tanpa lampiran,
+// kecuali jenis cuti yang dokumennya boleh menyusul (mis. Cuti Sakit).
+const documentRequired = computed(() => Boolean(selectedType.value?.requiresDocument));
+const documentMandatoryNow = computed(() => documentRequired.value && !selectedType.value?.allowLateDocument);
+
+// Ganti ke jenis cuti tanpa dokumen: berkas yang sudah dipilih tidak ikut terkirim.
+watch(documentRequired, (required) => {
+    if (!required) form.value.document = null;
+});
+
 const problem = computed(() => {
     const f = form.value;
     if (!f.userId || !f.leaveTypeId || !f.startDate || !f.endDate || (substituteRequired.value && !f.substituteId) || !f.reason.trim()) {
         return 'Lengkapi semua kolom bertanda *.';
     }
+    if (documentMandatoryNow.value && !f.document) return 'Lengkapi semua kolom bertanda *.';
     if (f.endDate < f.startDate) return 'Tanggal selesai harus setelah tanggal mulai.';
     if (workingDays.value === 0) return 'Rentang tanggal tidak berisi hari kerja.';
     if (selectedType.value?.usesQuota && balance.value && workingDays.value > balance.value.remaining) {
@@ -59,14 +72,16 @@ const problem = computed(() => {
 });
 
 // Pesan per field untuk syarat yang sama dengan `problem`; ditampilkan di bawah field (audit-017 #1).
-const EMPTY_ERRORS = { userId: '', leaveTypeId: '', startDate: '', endDate: '', substituteId: '', reason: '', balance: '' };
+const EMPTY_ERRORS = { userId: '', leaveTypeId: '', startDate: '', endDate: '', substituteId: '', reason: '', document: '', balance: '' };
 const errors = ref({ ...EMPTY_ERRORS });
-for (const key of ['userId', 'leaveTypeId', 'startDate', 'endDate', 'substituteId', 'reason']) {
+for (const key of ['userId', 'leaveTypeId', 'startDate', 'endDate', 'substituteId', 'reason', 'document']) {
     watch(() => form.value[key], () => {
         errors.value[key] = '';
         // Ganti karyawan mengubah apakah pengganti wajib, jadi pesan pengganti ikut dihapus.
         if (key === 'userId') errors.value.substituteId = '';
-        if (key !== 'reason' && key !== 'substituteId') errors.value.balance = '';
+        // Ganti jenis cuti bisa membuat dokumen tidak wajib lagi.
+        if (key === 'leaveTypeId') errors.value.document = '';
+        if (key !== 'reason' && key !== 'substituteId' && key !== 'document') errors.value.balance = '';
     });
 }
 
@@ -80,6 +95,7 @@ function fieldErrors() {
     // Field pengganti nonaktif sampai karyawan dipilih; pesannya baru berarti setelah itu.
     if (f.userId && substituteRequired.value && !f.substituteId) e.substituteId = 'Pilih pengganti tugas.';
     if (!f.reason.trim()) e.reason = 'Isi alasan pengajuan.';
+    if (documentMandatoryNow.value && !f.document) e.document = `Unggah dokumen pendukung untuk ${selectedType.value.name}.`;
     if (Object.values(e).some(Boolean)) return e;
     if (f.endDate < f.startDate) e.endDate = 'Tanggal selesai harus setelah tanggal mulai.';
     else if (workingDays.value === 0) e.endDate = 'Rentang tanggal tidak berisi hari kerja.';
@@ -94,6 +110,7 @@ const FOCUS_TARGET = {
     endDate: '#acl-end',
     substituteId: '[aria-labelledby="acl-sub-label"]',
     reason: '#acl-reason',
+    document: '#acl-document',
     balance: '#acl-end'
 };
 
@@ -124,7 +141,7 @@ const endDateHelp = computed(() => {
 
 const isDirty = computed(() => {
     const f = form.value;
-    return Boolean(f.userId || f.leaveTypeId || f.startDate || f.endDate || f.substituteId || f.reason.trim());
+    return Boolean(f.userId || f.leaveTypeId || f.startDate || f.endDate || f.substituteId || f.reason.trim() || f.document);
 });
 
 // Batal tidak membuang isian tanpa konfirmasi (audit-017 #7).
@@ -153,13 +170,25 @@ async function submit() {
     saving.value = true;
     try {
         const f = form.value;
+        // Berkas diunggah dulu (sama seperti form karyawan); URL-nya dikirim bersama pengajuan.
+        let attachmentUrl;
+        if (f.document?.file) {
+            try {
+                const uploaded = await leaveService.uploadDocument(f.document.file);
+                attachmentUrl = uploaded?.url || uploaded?.file_path;
+            } catch (upErr) {
+                throw new Error(`Upload dokumen gagal: ${upErr?.data?.message || upErr?.message || 'berkas tidak terkirim ke server'}`);
+            }
+        }
         const res = await leaveService.createLeave({
             uid_user_system: f.userId,
             kd_leave_type: f.leaveTypeId,
             start_date: toIso(f.startDate),
             end_date: toIso(f.endDate),
             substitute_id: f.substituteId || undefined,
-            reason: f.reason.trim()
+            reason: f.reason.trim(),
+            attachment_url: attachmentUrl,
+            attachment_name: attachmentUrl ? f.document.name : undefined
         });
         await syncFromBackend({ fresh: true });
         const employee = employees.value.find((u) => u.id === f.userId);
@@ -319,6 +348,22 @@ async function submit() {
                         :aria-describedby="errors.reason ? 'acl-reason-error' : undefined"
                     />
                     <p v-if="errors.reason" id="acl-reason-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ errors.reason }}</p>
+                </div>
+                <!-- Hanya untuk jenis cuti wajib dokumen; tanpa field ini backend menolak pengajuan (bug Pengajuan Karyawan #3). -->
+                <div v-if="documentRequired" id="acl-document" tabindex="-1" class="min-w-0 sm:col-span-2 outline-none">
+                    <div class="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
+                        <span id="acl-document-label" class="font-medium text-surface-700 dark:text-surface-300">
+                            Dokumen pendukung
+                            <span v-if="documentMandatoryNow" class="text-(--status-danger-fg)" aria-hidden="true">*</span>
+                        </span>
+                        <span v-if="!documentMandatoryNow" class="text-xs font-semibold text-amber-700 dark:text-amber-300">Wajib, boleh menyusul maks. {{ selectedType.lateDocumentDays }} hari</span>
+                        <span v-else class="text-xs font-semibold text-(--status-danger-fg)">Wajib untuk {{ selectedType.name }}</span>
+                    </div>
+                    <p v-if="!documentMandatoryNow && !form.document" class="mb-1.5 text-xs leading-relaxed text-muted-color">
+                        Belum ada dokumennya? Pengajuan tetap bisa dibuat; karyawan melengkapi dokumen dari halaman Pengajuan Cuti paling lambat {{ selectedType.lateDocumentDays }} hari setelah pengajuan dibuat. Pengajuan baru bisa disetujui setelah dokumen diunggah.
+                    </p>
+                    <LeaveAttachmentUpload v-model="form.document" :disabled="saving" />
+                    <p v-if="errors.document" id="acl-document-error" class="mt-1 text-xs text-(--status-danger-fg)">{{ errors.document }}</p>
                 </div>
             </div>
             </section>
