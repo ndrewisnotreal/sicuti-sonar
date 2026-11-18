@@ -162,6 +162,8 @@ async function saveFlow() {
                 optionValue="value"
                 optionDisabled="disabled"
                 filter
+                filterPlaceholder="Search"
+                :showToggleAll="false"
                 display="chip"
                 :maxSelectedLabels="6"
                 placeholder="Pilih akun approver"
