@@ -87,19 +87,43 @@ describe('LeaveFormDialog validasi inline', () => {
         w.unmount();
     });
 
-    it('tanggal mulai di tahun depan memuat saldo dan hari libur tahun itu', async () => {
+    it('saldo diambil untuk tanggal mulai, hari libur untuk tahunnya', async () => {
+        const { leaveService } = await import('@/service/leaveService');
+        const nextYear = new Date().getFullYear() + 1;
+        leaveService.getBalances.mockClear();
+        const w = mount(LeaveFormDialog, { props: { visible: true }, global: { stubs } });
+        await flushPromises();
+        // Belum ada tanggal mulai: periode yang sedang berjalan
+        expect(leaveService.getBalances).toHaveBeenCalledWith({});
+        leaveService.getBalances.mockClear();
+        leaveService.getHolidays.mockClear();
+
+        w.findAllComponents({ name: 'DatePicker' })[0].vm.$emit('update:modelValue', new Date(nextYear, 0, 11));
+        await flushPromises();
+
+        expect(leaveService.getBalances).toHaveBeenCalledWith({ date: `${nextYear}-01-11` });
+        expect(leaveService.getHolidays).toHaveBeenCalledWith(nextYear);
+
+        // Tanggal lain di tahun yang sama: saldo diambil ulang (periode/carry over bisa berbeda), hari libur tidak
+        leaveService.getBalances.mockClear();
+        leaveService.getHolidays.mockClear();
+        w.findAllComponents({ name: 'DatePicker' })[0].vm.$emit('update:modelValue', new Date(nextYear, 7, 2));
+        await flushPromises();
+        expect(leaveService.getBalances).toHaveBeenCalledWith({ date: `${nextYear}-08-02` });
+        expect(leaveService.getHolidays).not.toHaveBeenCalled();
+        w.unmount();
+    });
+
+    it('sisa saldo di form memakai baris yang dikirim backend untuk tanggal itu', async () => {
         const { leaveService } = await import('@/service/leaveService');
         const nextYear = new Date().getFullYear() + 1;
         const w = mount(LeaveFormDialog, { props: { visible: true }, global: { stubs } });
         await flushPromises();
-        leaveService.getBalances.mockClear();
-        leaveService.getHolidays.mockClear();
-
-        w.findAllComponents({ name: 'DatePicker' })[0].vm.$emit('update:modelValue', new Date(nextYear, 0, 10));
+        // Baris tahun pilihan berbeda dari tahun tanggal mulai (periode sejak tanggal masuk)
+        leaveService.getBalances.mockResolvedValueOnce([{ year: nextYear - 1, remaining: 3 }]);
+        w.findAllComponents({ name: 'DatePicker' })[0].vm.$emit('update:modelValue', new Date(nextYear, 0, 11));
         await flushPromises();
-
-        expect(leaveService.getBalances).toHaveBeenCalledWith({ year: nextYear });
-        expect(leaveService.getHolidays).toHaveBeenCalledWith(nextYear);
+        expect(w.text()).toContain('Saldo Tersedia: 3 hari');
         w.unmount();
     });
 });

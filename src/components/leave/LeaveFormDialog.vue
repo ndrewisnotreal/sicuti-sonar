@@ -98,9 +98,10 @@ const currentYear = computed(() => {
     return form.value.startDate ? new Date(form.value.startDate).getFullYear() : new Date().getFullYear();
 });
 
+// Backend mengirim satu baris: saldo periode (sejak tanggal masuk) yang memuat tanggal mulai.
 const remainingBalance = computed(() => {
     if (!balances.value.length) return 0;
-    const found = balances.value.find((b) => Number(b.year) === currentYear.value) || balances.value[0];
+    const found = balances.value[0];
     return Number(found.remaining ?? (Number(found.annual_quota || 0) + Number(found.carry_over_days || 0) - Number(found.used_days || 0)));
 });
 
@@ -235,21 +236,38 @@ function resetForm() {
     formErrors.value = {};
 }
 
-// Saldo dan hari libur mengikuti tahun tanggal mulai, karena backend memotong saldo tahun itu.
+// Saldo mengikuti tanggal mulai: backend memotong saldo periode (sejak tanggal masuk) yang memuat
+// tanggal itu, dan carry over hanya terhitung bila tanggal mulai masih dalam masa berlakunya.
+// Tanpa tanggal mulai: periode yang sedang berjalan.
+const startIso = computed(() => (form.value.startDate ? formatDate(form.value.startDate) : ''));
+let loadedDate = null;
+let balanceSeq = 0;
+async function loadBalance(date) {
+    const seq = ++balanceSeq;
+    loadedDate = date;
+    const bals = await leaveService.getBalances(date ? { date } : {}).catch(() => []);
+    // Tanggal diganti cepat: hanya hasil tanggal terakhir yang dipakai.
+    if (seq !== balanceSeq) return;
+    balances.value = Array.isArray(bals) ? bals : bals ? [bals] : [];
+}
+
+// Hari libur tetap per tahun kalender tanggal mulai.
 let loadedYear = null;
 let yearSeq = 0;
-async function loadYearData(year) {
+async function loadHolidays(year) {
     const seq = ++yearSeq;
     loadedYear = year;
-    const [bals, hols] = await Promise.all([leaveService.getBalances({ year }).catch(() => []), leaveService.getHolidays(year).catch(() => [])]);
-    // Tanggal diganti cepat: hanya hasil tahun terakhir yang dipakai.
+    const hols = await leaveService.getHolidays(year).catch(() => []);
     if (seq !== yearSeq) return;
-    balances.value = Array.isArray(bals) ? bals : bals ? [bals] : [];
     holidays.value = Array.isArray(hols) ? hols : [];
 }
 
+watch(startIso, (date) => {
+    if (props.visible && loadedDate !== null && date !== loadedDate) loadBalance(date);
+});
+
 watch(currentYear, (year) => {
-    if (props.visible && loadedYear !== null && year !== loadedYear) loadYearData(year);
+    if (props.visible && loadedYear !== null && year !== loadedYear) loadHolidays(year);
 });
 
 async function loadInitialData() {
@@ -258,7 +276,8 @@ async function loadInitialData() {
         const [types, users] = await Promise.all([
             leaveService.getLeaveTypes(false).catch(() => []),
             leaveService.getColleagues().catch(() => []),
-            loadYearData(currentYear.value)
+            loadBalance(startIso.value),
+            loadHolidays(currentYear.value)
         ]);
 
         leaveTypes.value = Array.isArray(types) ? types : [];
